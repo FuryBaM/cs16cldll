@@ -42,7 +42,6 @@
 *.o
 *.lo
 *.slo
-*.lib
 *.a
 *.dll
 *.so
