@@ -39,3 +39,13 @@
 
 # debug information files
 *.dwo
+
+/.vs
+
+*.tlog
+*.log
+/Release
+/Debug
+
+/cl_dll/Release
+/cl_dll/Debug
