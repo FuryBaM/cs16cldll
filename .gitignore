@@ -1,51 +1,83 @@
-# Prerequisites
-*.d
+# VS solution metadata
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+# IDEs
+.vscode/
+.idea/
 
-# Precompiled Headers
-*.gch
-*.pch
+# Build trees (any folder named build, bin, obj, out, x64, x86, etc.)
+**/[Bb]uild*/
+**/[Bb]in*/
+**/[Oo]bj*/
+**/[Oo]ut*/
+**/x64/
+**/x86/
+**/ARM*/
+**/Win32/
 
-# Linker files
-*.ilk
+# Any Debug/Release anywhere (and variants like ReleaseWithDebInfo)
+**/[Dd]ebug*/
+**/[Rr]elease*/
+**/[Rr]elWithDebInfo*/
+**/[Mm]in[Ss]ize[Rr]el*/
 
-# Debugger Files
+# MSVC intermediates
+*.idb
 *.pdb
+*.ilk
+*.ipch
+*.pch
+*.tlog
+*.log
+*.opendb
+*.VC.db
+*.VC.VC.opendb
 
-# Compiled Dynamic libraries
+# Compiled objects and libs
+*.obj
+*.o
+*.lo
+*.slo
+*.lib
+*.a
+*.dll
 *.so
 *.dylib
-*.dll
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
 *.exe
 *.out
 *.app
 
-# debug information files
+# Static/Fortran
+*.la
+*.lai
+*.mod
+*.smod
+
+# PGO/coverage
+*.pgc
+*.pgd
+*.pgo
+*.gcno
+*.gcda
 *.dwo
 
-/.vs
+# Ninja / CMake
+.build/
+cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Testing/
+Makefile
+cmake_install.cmake
+compile_commands.json
+build.ninja
+*.ninja
+*.dir/
 
-*.tlog
-*.log
-/Release
-/Debug
-
-/cl_dll/Release
-/cl_dll/Debug
+# HLSDK generated
+*.d
