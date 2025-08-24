@@ -15,9 +15,10 @@
 //
 // ammohistory.h
 //
-
+#pragma once
+typedef int HSPRITE;
 // this is the max number of items in each bucket
-#define MAX_WEAPON_POSITIONS		MAX_WEAPON_SLOTS
+#define MAX_WEAPON_POSITIONS		22
 
 class WeaponsResource
 {
@@ -56,6 +57,12 @@ public:
 	void PickupWeapon( WEAPON *wp )
 	{
 		rgSlots[ wp->iSlot ][ wp->iSlotPos ] = wp;
+	}
+
+	void PickupWeapon( int idx )
+	{
+		WEAPON *wp = &rgWeapons[ idx ];
+		PickupWeapon( wp );
 	}
 
 	void DropWeapon( WEAPON *wp )

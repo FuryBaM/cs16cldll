@@ -15,7 +15,9 @@
 #if !defined ( R_EFXH )
 #define R_EFXH
 #ifdef _WIN32
+#ifndef __MINGW32__
 #pragma once
+#endif /* not __MINGW32__ */
 #endif
 
 // particle_t
@@ -84,7 +86,10 @@ color24 gTracerColors[] =
 #define FTENT_SPARKSHOWER		0x00020000
 #define FTENT_NOMODEL			0x00040000 // Doesn't have a model, never try to draw ( it just triggers other things )
 #define FTENT_CLIENTCUSTOM		0x00080000 // Must specify callback.  Callback function is responsible for killing tempent and updating fields ( unless other flags specify how to do things )
+#define FTENT_BODYTRACE			0x00100000
+#define FTENT_BODYGRAVITY		0x00200000
 
+typedef struct tempent_s	TEMPENTITY;
 typedef struct tempent_s
 {
 	int			flags;
@@ -98,7 +103,7 @@ typedef struct tempent_s
 	int			hitSound;
 	void		( *hitcallback )	( struct tempent_s *ent, struct pmtrace_s *ptr );
 	void		( *callback )		( struct tempent_s *ent, float frametime, float currenttime );
-	struct tempent_s	*next;
+	TEMPENTITY	*next;
 	int			priority;
 	short		clientIndex;	// if attached, this is the index of the client to stick to
 								// if COLLIDEALL, this is the index of the client to ignore
@@ -189,7 +194,6 @@ struct efx_api_s
 	void		( *R_GetPackedColor )			( short *packed, short color );
 	short		( *R_LookupColor )				( unsigned char r, unsigned char g, unsigned char b );
 	void		( *R_DecalRemoveAll )			( int textureIndex ); //textureIndex points to the decal index in the array, not the actual texture index.
-	void		( *R_FireCustomDecal )			( int textureIndex, int entity, int modelIndex, float * position, int flags, float scale );
 };
 
 extern efx_api_t efx;

@@ -12,20 +12,35 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\common\parsemsg.cpp" />
-    <ClCompile Include="..\dlls\crossbow.cpp" />
-    <ClCompile Include="..\dlls\crowbar.cpp" />
-    <ClCompile Include="..\dlls\egon.cpp" />
-    <ClCompile Include="..\dlls\gauss.cpp" />
-    <ClCompile Include="..\dlls\handgrenade.cpp" />
-    <ClCompile Include="..\dlls\hornetgun.cpp" />
-    <ClCompile Include="..\dlls\mp5.cpp" />
-    <ClCompile Include="..\dlls\python.cpp" />
-    <ClCompile Include="..\dlls\rpg.cpp" />
-    <ClCompile Include="..\dlls\satchel.cpp" />
-    <ClCompile Include="..\dlls\shotgun.cpp" />
-    <ClCompile Include="..\dlls\squeakgrenade.cpp" />
-    <ClCompile Include="..\dlls\tripmine.cpp" />
-    <ClCompile Include="..\dlls\wpn_shared\hl_wpn_glock.cpp" />
+    <ClCompile Include="..\dlls\wpn_shared\wpn_ak47.cpp" />
+    <ClCompile Include="..\dlls\wpn_shared\wpn_aug.cpp" />
+    <ClCompile Include="..\dlls\wpn_shared\wpn_awp.cpp" />
+    <ClCompile Include="..\dlls\wpn_shared\wpn_c4.cpp" />
+    <ClCompile Include="..\dlls\wpn_shared\wpn_deagle.cpp" />
+    <ClCompile Include="..\dlls\wpn_shared\wpn_elite.cpp" />
+    <ClCompile Include="..\dlls\wpn_shared\wpn_famas.cpp" />
+    <ClCompile Include="..\dlls\wpn_shared\wpn_fiveseven.cpp" />
+    <ClCompile Include="..\dlls\wpn_shared\wpn_flashbang.cpp" />
+    <ClCompile Include="..\dlls\wpn_shared\wpn_g3sg1.cpp" />
+    <ClCompile Include="..\dlls\wpn_shared\wpn_galil.cpp" />
+    <ClCompile Include="..\dlls\wpn_shared\wpn_glock18.cpp" />
+    <ClCompile Include="..\dlls\wpn_shared\wpn_hegrenade.cpp" />
+    <ClCompile Include="..\dlls\wpn_shared\wpn_knife.cpp" />
+    <ClCompile Include="..\dlls\wpn_shared\wpn_m249.cpp" />
+    <ClCompile Include="..\dlls\wpn_shared\wpn_m3.cpp" />
+    <ClCompile Include="..\dlls\wpn_shared\wpn_m4a1.cpp" />
+    <ClCompile Include="..\dlls\wpn_shared\wpn_mac10.cpp" />
+    <ClCompile Include="..\dlls\wpn_shared\wpn_mp5navy.cpp" />
+    <ClCompile Include="..\dlls\wpn_shared\wpn_p228.cpp" />
+    <ClCompile Include="..\dlls\wpn_shared\wpn_p90.cpp" />
+    <ClCompile Include="..\dlls\wpn_shared\wpn_scout.cpp" />
+    <ClCompile Include="..\dlls\wpn_shared\wpn_sg550.cpp" />
+    <ClCompile Include="..\dlls\wpn_shared\wpn_sg552.cpp" />
+    <ClCompile Include="..\dlls\wpn_shared\wpn_smokegrenade.cpp" />
+    <ClCompile Include="..\dlls\wpn_shared\wpn_tmp.cpp" />
+    <ClCompile Include="..\dlls\wpn_shared\wpn_ump45.cpp" />
+    <ClCompile Include="..\dlls\wpn_shared\wpn_usp.cpp" />
+    <ClCompile Include="..\dlls\wpn_shared\wpn_xm1014.cpp" />
     <ClCompile Include="..\game_shared\vgui_checkbutton2.cpp" />
     <ClCompile Include="..\game_shared\vgui_grid.cpp" />
     <ClCompile Include="..\game_shared\vgui_helpers.cpp" />
@@ -34,9 +49,10 @@
     <ClCompile Include="..\game_shared\vgui_scrollbar2.cpp" />
     <ClCompile Include="..\game_shared\vgui_slider2.cpp" />
     <ClCompile Include="..\game_shared\voice_banmgr.cpp" />
-    <ClCompile Include="..\pm_shared\pm_debug.c" />
-    <ClCompile Include="..\pm_shared\pm_math.c" />
-    <ClCompile Include="..\pm_shared\pm_shared.c" />
+    <ClCompile Include="..\game_shared\voice_status.cpp" />
+    <ClCompile Include="..\pm_shared\pm_debug.cpp" />
+    <ClCompile Include="..\pm_shared\pm_math.cpp" />
+    <ClCompile Include="..\pm_shared\pm_shared.cpp" />
     <ClCompile Include="..\public\interface.cpp" />
     <ClCompile Include="ammo.cpp" />
     <ClCompile Include="ammohistory.cpp" />
@@ -44,23 +60,48 @@
     <ClCompile Include="battery.cpp" />
     <ClCompile Include="cdll_int.cpp" />
     <ClCompile Include="com_weapons.cpp" />
+    <ClCompile Include="cs_wpn\cs_weapons.cpp" />
     <ClCompile Include="death.cpp" />
     <ClCompile Include="demo.cpp" />
     <ClCompile Include="entity.cpp" />
     <ClCompile Include="events.cpp" />
+    <ClCompile Include="events\event_ak47.cpp" />
+    <ClCompile Include="events\event_aug.cpp" />
+    <ClCompile Include="events\event_awp.cpp" />
+    <ClCompile Include="events\event_createexplo.cpp" />
+    <ClCompile Include="events\event_createsmoke.cpp" />
+    <ClCompile Include="events\event_czerods.cpp" />
+    <ClCompile Include="events\event_deagle.cpp" />
+    <ClCompile Include="events\event_decal_reset.cpp" />
+    <ClCompile Include="events\event_elite.cpp" />
+    <ClCompile Include="events\event_famas.cpp" />
+    <ClCompile Include="events\event_fiveseven.cpp" />
+    <ClCompile Include="events\event_g3sg1.cpp" />
+    <ClCompile Include="events\event_galil.cpp" />
+    <ClCompile Include="events\event_glock18.cpp" />
+    <ClCompile Include="events\event_knife.cpp" />
+    <ClCompile Include="events\event_m249.cpp" />
+    <ClCompile Include="events\event_m3.cpp" />
+    <ClCompile Include="events\event_m4a1.cpp" />
+    <ClCompile Include="events\event_mac10.cpp" />
+    <ClCompile Include="events\event_mp5n.cpp" />
+    <ClCompile Include="events\event_p228.cpp" />
+    <ClCompile Include="events\event_p90.cpp" />
+    <ClCompile Include="events\event_scout.cpp" />
+    <ClCompile Include="events\event_sg550.cpp" />
+    <ClCompile Include="events\event_sg552.cpp" />
+    <ClCompile Include="events\event_tmp.cpp" />
+    <ClCompile Include="events\event_ump45.cpp" />
+    <ClCompile Include="events\event_usp.cpp" />
+    <ClCompile Include="events\event_vehicle.cpp" />
+    <ClCompile Include="events\event_xm1014.cpp" />
+    <ClCompile Include="events\ev_cs16.cpp" />
     <ClCompile Include="ev_common.cpp" />
-    <ClCompile Include="ev_hldm.cpp" />
     <ClCompile Include="flashlight.cpp" />
     <ClCompile Include="GameStudioModelRenderer.cpp" />
     <ClCompile Include="geiger.cpp" />
     <ClCompile Include="health.cpp" />
-    <ClCompile Include="hl\hl_baseentity.cpp" />
-    <ClCompile Include="hl\hl_events.cpp" />
-    <ClCompile Include="hl\hl_objects.cpp" />
-    <ClCompile Include="hl\hl_weapons.cpp" />
     <ClCompile Include="hud.cpp" />
-    <ClCompile Include="hud_bench.cpp" />
-    <ClCompile Include="hud_benchtrace.cpp" />
     <ClCompile Include="hud_msg.cpp" />
     <ClCompile Include="hud_redraw.cpp" />
     <ClCompile Include="hud_servers.cpp" />
@@ -72,6 +113,7 @@
     <ClCompile Include="in_camera.cpp" />
     <ClCompile Include="menu.cpp" />
     <ClCompile Include="message.cpp" />
+    <ClCompile Include="radar.cpp" />
     <ClCompile Include="saytext.cpp" />
     <ClCompile Include="statusbar.cpp" />
     <ClCompile Include="status_icons.cpp" />
@@ -81,19 +123,7 @@
     <ClCompile Include="train.cpp" />
     <ClCompile Include="tri.cpp" />
     <ClCompile Include="util.cpp" />
-    <ClCompile Include="vgui_ClassMenu.cpp" />
-    <ClCompile Include="vgui_ControlConfigPanel.cpp" />
-    <ClCompile Include="vgui_CustomObjects.cpp" />
-    <ClCompile Include="vgui_int.cpp" />
-    <ClCompile Include="vgui_MOTDWindow.cpp" />
-    <ClCompile Include="vgui_SchemeManager.cpp" />
-    <ClCompile Include="vgui_ScorePanel.cpp" />
-    <ClCompile Include="vgui_ServerBrowser.cpp" />
-    <ClCompile Include="vgui_SpectatorPanel.cpp" />
-    <ClCompile Include="vgui_TeamFortressViewport.cpp" />
-    <ClCompile Include="vgui_teammenu.cpp" />
     <ClCompile Include="view.cpp" />
-    <ClCompile Include="voice_status.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\common\parsemsg.h" />
@@ -113,7 +143,10 @@
     <ClInclude Include="cl_dll.h" />
     <ClInclude Include="cl_util.h" />
     <ClInclude Include="com_weapons.h" />
+    <ClInclude Include="csprite.h" />
     <ClInclude Include="demo.h" />
+    <ClInclude Include="draw_util.h" />
+    <ClInclude Include="events.h" />
     <ClInclude Include="eventscripts.h" />
     <ClInclude Include="ev_hldm.h" />
     <ClInclude Include="GameStudioModelRenderer.h" />
@@ -125,15 +158,10 @@
     <ClInclude Include="interpolation.h" />
     <ClInclude Include="in_defs.h" />
     <ClInclude Include="kbutton.h" />
+    <ClInclude Include="radar.h" />
+    <ClInclude Include="rain.h" />
     <ClInclude Include="StudioModelRenderer.h" />
     <ClInclude Include="tri.h" />
-    <ClInclude Include="util_vector.h" />
-    <ClInclude Include="vgui_ControlConfigPanel.h" />
-    <ClInclude Include="vgui_int.h" />
-    <ClInclude Include="vgui_SchemeManager.h" />
-    <ClInclude Include="vgui_ScorePanel.h" />
-    <ClInclude Include="vgui_ServerBrowser.h" />
-    <ClInclude Include="vgui_SpectatorPanel.h" />
     <ClInclude Include="view.h" />
     <ClInclude Include="wrect.h" />
   </ItemGroup>
@@ -182,15 +210,16 @@
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>
       </SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;CLIENT_DLL;CLIENT_WEAPONS;HL_DLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;CLIENT_DLL;CLIENT_WEAPONS;HL_DLL;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>Default</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <LanguageStandard>Default</LanguageStandard>
+      <LanguageStandard>stdcpp17</LanguageStandard>
       <LanguageStandard_C>Default</LanguageStandard_C>
       <AdditionalIncludeDirectories>$(SolutionDir)dlls;$(SolutionDir)cl_dll;$(SolutionDir)public;$(SolutionDir)common;$(SolutionDir)pm_shared;$(SolutionDir)engine;$(SolutionDir)utils\vgui\include;$(SolutionDir)game_shared;$(SolutionDir)external;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <ShowIncludes>false</ShowIncludes>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -211,8 +240,8 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <AdditionalIncludeDirectories>$(SolutionDir)dlls;$(SolutionDir)cl_dll;$(SolutionDir)public;$(SolutionDir)common;$(SolutionDir)pm_shared;$(SolutionDir)engine;$(SolutionDir)utils\vgui\include;$(SolutionDir)game_shared;$(SolutionDir)external;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <LanguageStandard>stdcpp14</LanguageStandard>
-      <LanguageStandard_C>Default</LanguageStandard_C>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <LanguageStandard_C>stdclatest</LanguageStandard_C>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
     </ClCompile>

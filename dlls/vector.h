@@ -14,7 +14,8 @@
 ****/
 #ifndef VECTOR_H
 #define VECTOR_H
-
+#pragma disable(war)
+#include "math.h"
 //=========================================================
 // 2DVector - used for many pathfinding and many other 
 // operations that are treated as planar rather than 3d.
@@ -99,6 +100,7 @@ public:
 		return Vec2;
 	}
 	inline float Length2D(void) const					{ return sqrt(x*x + y*y); }
+	inline bool IsNull(void) const { return !x && !y && !z; }
 
 	// Members
 	vec_t x, y, z;

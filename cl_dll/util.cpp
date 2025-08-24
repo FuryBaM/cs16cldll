@@ -138,3 +138,15 @@ HSPRITE LoadSprite(const char *pszName)
 	return SPR_Load(sz);
 }
 
+float* GetClientColor(int clientIndex)
+{
+	switch (g_PlayerExtraInfo[clientIndex].teamnumber)
+	{
+	case TEAM_CT:         return g_ColorBlue;
+	case TEAM_TERRORIST:  return g_ColorRed;
+	case TEAM_UNASSIGNED:
+	case TEAM_SPECTATOR:  return g_ColorGrey;
+	case 4:		          return g_ColorGreen;
+	default:              return g_ColorGrey;
+	}
+}

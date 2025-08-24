@@ -1,9 +1,9 @@
 /***
 *
 *	Copyright (c) 1996-2002, Valve LLC. All rights reserved.
-*	
-*	This product contains software technology licensed from Id 
-*	Software, Inc. ("Id Technology").  Id Technology (c) 1996 Id Software, Inc. 
+*
+*	This product contains software technology licensed from Id
+*	Software, Inc. ("Id Technology").  Id Technology (c) 1996 Id Software, Inc.
 *	All Rights Reserved.
 *
 *   Use, distribution, and modification of this source code and/or resulting
@@ -12,7 +12,7 @@
 *   without written permission from Valve LLC.
 *
 ****/
-
+#pragma once
 #define DMG_IMAGE_LIFE		2	// seconds that image is up
 
 #define DMG_IMAGE_POISON	0
@@ -31,6 +31,7 @@
 #define NUM_DMG_TYPES		12
 // instant damage
 
+#ifndef DMG_CRUSH
 #define DMG_GENERIC			0			// generic damage was done
 #define DMG_CRUSH			(1 << 0)	// crushed by falling or moving object
 #define DMG_BULLET			(1 << 1)	// shot
@@ -65,6 +66,7 @@
 #define DMG_SLOWFREEZE		(1 << 22)	// in a subzero freezer
 #define DMG_MORTAR			(1 << 23)	// Hit by air raid (done to distinguish grenade from mortar)
 
+#endif
 //TF ADDITIONS
 #define DMG_IGNITE			(1 << 24)	// Players hit by this begin to burn
 #define DMG_RADIUS_MAX		(1 << 25)	// Radius damage with this flag doesn't decrease over distance
@@ -87,41 +89,50 @@
 #define DMG_CONCUSS				DMG_SONIC
 
 
-
-typedef struct
+struct DAMAGE_IMAGE
 {
 	float fExpire;
 	float fBaseline;
 	int	x, y;
-} DAMAGE_IMAGE;
-	
+};
+
 //
 //-----------------------------------------------------
 //
-class CHudHealth: public CHudBase
+class CHudHealth : public CHudBase
 {
 public:
-	virtual int Init( void );
-	virtual int VidInit( void );
+	virtual int Init(void);
+	virtual int VidInit(void);
 	virtual int Draw(float fTime);
-	virtual void Reset( void );
-	int MsgFunc_Health(const char *pszName,  int iSize, void *pbuf);
-	int MsgFunc_Damage(const char *pszName,  int iSize, void *pbuf);
+	virtual void Reset(void);
+
+	int MsgFunc_Health(const char* pszName, int iSize, void* pbuf);
+	int MsgFunc_Damage(const char* pszName, int iSize, void* pbuf);
+	int MsgFunc_ScoreAttrib(const char* pszName, int iSize, void* pbuf);
+	int MsgFunc_ClCorpse(const char* pszName, int iSize, void* pbuf);
+	int MsgFunc_HealthInfo(const char* pszName, int iSize, void* pbuf);
+	int MsgFunc_Account(const char* pszName, int iSize, void* pbuf);
+
 	int m_iHealth;
 	int m_HUD_dmg_bio;
 	int m_HUD_cross;
-	float m_fAttackFront, m_fAttackRear, m_fAttackLeft, m_fAttackRight;
-	void GetPainColor( int &r, int &g, int &b );
+	//float m_fAttackFront, m_fAttackRear, m_fAttackLeft, m_fAttackRight;
+	float m_fAttack[4];
+	void GetPainColor(int& r, int& g, int& b, int& a);
 	float m_fFade;
-
 private:
+	void DrawPain(float fTime);
+	void DrawDamage(float fTime);
+	void DrawHealthBar(float flTime);
+	void CalcDamageDirection(Vector vecFrom);
+	void UpdateTiles(float fTime, long bits);
+
 	HSPRITE m_hSprite;
 	HSPRITE m_hDamage;
-	
+	Vector2D m_vAttackPos[4];
 	DAMAGE_IMAGE m_dmg[NUM_DMG_TYPES];
+	float m_flTimeFlash;
 	int	m_bitsDamage;
-	int DrawPain(float fTime);
-	int DrawDamage(float fTime);
-	void CalcDamageDirection(vec3_t vecFrom);
-	void UpdateTiles(float fTime, long bits);
-};	
+	cvar_t* cl_radartype;
+};

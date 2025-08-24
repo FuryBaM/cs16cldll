@@ -26,6 +26,7 @@
 #include <stdio.h> // for safe_sprintf()
 #include <stdarg.h>  // "
 #include <string.h> // for strncpy()
+#include <cl_dll.h>
 
 // Macros to hook function calls into the HUD object
 #define HOOK_MESSAGE(x) gEngfuncs.pfnHookUserMsg(#x, __MsgFunc_##x );
@@ -35,6 +36,10 @@
 							return gHUD.y.MsgFunc_##x(pszName, iSize, pbuf ); \
 							}
 
+#define DECLARE_MESSAGE_GHUD(x) \
+    int __MsgFunc_##x(const char* pszName, int iSize, void* pbuf) { \
+        return gHUD.MsgFunc_##x(pszName, iSize, pbuf); \
+    }
 
 #define HOOK_COMMAND(x, y) gEngfuncs.pfnAddCommand( x, __CmdFunc_##y );
 #define DECLARE_COMMAND(y, x) void __CmdFunc_##x( void ) \
@@ -64,12 +69,16 @@ inline struct cvar_s *CVAR_CREATE( const char *cv, const char *val, const int fl
 #define SPR_DisableScissor (*gEngfuncs.pfnSPR_DisableScissor)
 //
 #define FillRGBA (*gEngfuncs.pfnFillRGBA)
+#define FillRGBABlend (*gEngfuncs.pfnFillRGBABlend)
 
 
 // ScreenHeight returns the height of the screen, in pixels
 #define ScreenHeight (gHUD.m_scrinfo.iHeight)
 // ScreenWidth returns the width of the screen, in pixels
 #define ScreenWidth (gHUD.m_scrinfo.iWidth)
+
+#define TrueHeight (gHUD.m_truescrinfo.iHeight)
+#define TrueWidth (gHUD.m_truescrinfo.iWidth)
 
 #define BASE_XRES 640.f
 
@@ -84,11 +93,11 @@ inline struct cvar_s *CVAR_CREATE( const char *cv, const char *val, const int fl
 
 #define GetScreenInfo (*gEngfuncs.pfnGetScreenInfo)
 #define ServerCmd (*gEngfuncs.pfnServerCmd)
-#define EngineClientCmd (*gEngfuncs.pfnClientCmd)
-#define EngineFilteredClientCmd (*gEngfuncs.pfnFilteredClientCmd)
-#define SetCrosshair (*gEngfuncs.pfnSetCrosshair)
+#define ClientCmd (*gEngfuncs.pfnClientCmd)
+#define FilteredClientCmd (*gEngfuncs.pfnFilteredClientCmd)
 #define AngleVectors (*gEngfuncs.pfnAngleVectors)
-
+#define Com_RandomLong (*gEngfuncs.pfnRandomLong)
+#define Com_RandomFloat (*gEngfuncs.pfnRandomFloat)
 
 // Gets the height & width of a sprite,  at the specified frame
 inline int SPR_Height( HSPRITE x, int f )	{ return gEngfuncs.pfnSPR_Height(x, f); }
@@ -161,9 +170,17 @@ inline int safe_sprintf( char *dst, int len_dst, const char *format, ...)
 	return 0;
 }
 
+#define GetPlayerInfo (*gEngfuncs.pfnGetPlayerInfo)
+
+#ifdef PlaySound
+#undef PlaySound
+#endif
+#ifdef sndPlaySound
+#undef sndPlaySound
+#endif
 // sound functions
-inline void PlaySound( char *szSound, float vol ) { gEngfuncs.pfnPlaySoundByName( szSound, vol ); }
-inline void PlaySound( int iSound, float vol ) { gEngfuncs.pfnPlaySoundByIndex( iSound, vol ); }
+inline void PlaySound(const char* szSound, float vol) { gEngfuncs.pfnPlaySoundByName(szSound, vol); }
+inline void PlaySound(int iSound, float vol) { gEngfuncs.pfnPlaySoundByIndex(iSound, vol); }
 
 #define fabs(x)	   ((x) > 0 ? (x) : 0 - (x))
 
@@ -194,4 +211,48 @@ inline void UnpackRGB(int &r, int &g, int &b, unsigned long ulRGB)\
 	b = ulRGB & 0xFF;\
 }
 
+float* GetClientColor(int clientIndex);
 HSPRITE LoadSprite(const char *pszName);
+
+extern vec3_t g_ColorRed, g_ColorBlue, g_ColorYellow, g_ColorGrey, g_ColorGreen;
+
+inline void GetTeamColor(int& r, int& g, int& b, int teamIndex)
+{
+	r = 255;
+	g = 255;
+	b = 255;
+	switch (teamIndex)
+	{
+	case TEAM_TERRORIST:
+		r *= g_ColorRed[0];
+		g *= g_ColorRed[1];
+		b *= g_ColorRed[2];
+		break;
+	case TEAM_CT:
+		r *= g_ColorBlue[0];
+		g *= g_ColorBlue[1];
+		b *= g_ColorBlue[2];
+		break;
+	case TEAM_SPECTATOR:
+	case TEAM_UNASSIGNED:
+		r *= g_ColorYellow[0];
+		g *= g_ColorYellow[1];
+		b *= g_ColorYellow[2];
+		break;
+	default:
+		r *= g_ColorGrey[0];
+		g *= g_ColorGrey[1];
+		b *= g_ColorGrey[2];
+		break;
+	}
+}
+#define bound( min, num, max ) ((num) >= (min) ? ((num) < (max) ? (num) : (max)) : (min))
+#define RAD2DEG( x )	((float)(x) * (float)(180.f / M_PI))
+#define DEG2RAD( x )	((float)(x) * (float)(M_PI / 180.f))
+
+enum
+{
+	GAME_CSTRIKE = 0, // 1.6
+	GAME_CZERO = 1,   // czero
+	GAME_CZERODS = 2  // ritual czero
+};
