@@ -23,6 +23,7 @@
 #include "eventscripts.h"
 #include "com_weapons.h"
 #include "ev_hldm.h"
+#include "Exports.h"
 
 extern vec3_t v_origin;
 

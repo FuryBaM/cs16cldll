@@ -117,6 +117,29 @@ HSPRITE LoadSprite(const char *pszName)
 	return SPR_Load(sz);
 }
 
+float rsqrt(float number)
+{
+	int	i;
+	float	x, y;
+
+	if (number == 0.0f)
+		return 0.0f;
+
+	x = number * 0.5f;
+	i = *(int*)&number;	// evil floating point bit level hacking
+	i = 0x5f3759df - (i >> 1);	// what the fuck?
+	y = *(float*)&i;
+	y = y * (1.5f - (x * y * y));	// first iteration
+
+	return y;
+}
+
+vec3_t g_ColorBlue = { 0.6, 0.8, 1.0 };
+vec3_t g_ColorRed = { 1.0, 0.25, 0.25 };
+vec3_t g_ColorGreen = { 0.0, 1.0, 0.0 };
+vec3_t g_ColorYellow = { 1.0, 0.7, 0.0 };
+vec3_t g_ColorGrey = { 0.8, 0.8, 0.8 };
+
 float* GetClientColor(int clientIndex)
 {
 	switch (g_PlayerExtraInfo[clientIndex].teamnumber)

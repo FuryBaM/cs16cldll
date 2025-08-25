@@ -1026,3 +1026,9 @@ void CL_DLLEXPORT HUD_Shutdown( void )
 	
 	CL_UnloadParticleMan();
 }
+
+void Input_Shutdown(void)
+{
+	IN_Shutdown();
+	KB_Shutdown();
+}

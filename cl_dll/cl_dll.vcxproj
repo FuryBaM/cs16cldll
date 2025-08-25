@@ -102,6 +102,15 @@
     <ClCompile Include="geiger.cpp" />
     <ClCompile Include="health.cpp" />
     <ClCompile Include="hud.cpp" />
+    <ClCompile Include="hud\money.cpp" />
+    <ClCompile Include="hud\MOTD.cpp" />
+    <ClCompile Include="hud\nvg.cpp" />
+    <ClCompile Include="hud\radio.cpp" />
+    <ClCompile Include="hud\scenario.cpp" />
+    <ClCompile Include="hud\scoreboard.cpp" />
+    <ClCompile Include="hud\sniperscope.cpp" />
+    <ClCompile Include="hud\spectator_gui.cpp" />
+    <ClCompile Include="hud\timer.cpp" />
     <ClCompile Include="hud_msg.cpp" />
     <ClCompile Include="hud_redraw.cpp" />
     <ClCompile Include="hud_servers.cpp" />

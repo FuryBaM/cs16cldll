@@ -405,6 +405,33 @@
     <ClCompile Include="..\pm_shared\pm_shared.cpp">
       <Filter>Исходные файлы\pm_shared</Filter>
     </ClCompile>
+    <ClCompile Include="hud\radio.cpp">
+      <Filter>Исходные файлы\cl_dll</Filter>
+    </ClCompile>
+    <ClCompile Include="hud\scenario.cpp">
+      <Filter>Исходные файлы\cl_dll</Filter>
+    </ClCompile>
+    <ClCompile Include="hud\scoreboard.cpp">
+      <Filter>Исходные файлы\cl_dll</Filter>
+    </ClCompile>
+    <ClCompile Include="hud\sniperscope.cpp">
+      <Filter>Исходные файлы\cl_dll</Filter>
+    </ClCompile>
+    <ClCompile Include="hud\spectator_gui.cpp">
+      <Filter>Исходные файлы\cl_dll</Filter>
+    </ClCompile>
+    <ClCompile Include="hud\timer.cpp">
+      <Filter>Исходные файлы\cl_dll</Filter>
+    </ClCompile>
+    <ClCompile Include="hud\money.cpp">
+      <Filter>Исходные файлы\cl_dll</Filter>
+    </ClCompile>
+    <ClCompile Include="hud\MOTD.cpp">
+      <Filter>Исходные файлы\cl_dll</Filter>
+    </ClCompile>
+    <ClCompile Include="hud\nvg.cpp">
+      <Filter>Исходные файлы\cl_dll</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ammo.h">

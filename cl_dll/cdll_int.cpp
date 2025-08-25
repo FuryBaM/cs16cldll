@@ -56,19 +56,6 @@ int CL_DLLEXPORT Initialize(cl_enginefunc_t* pEnginefuncs, int iVersion)
 
 
 /*
-=============
-HUD_Shutdown
-
-=============
-*/
-void CL_DLLEXPORT HUD_Shutdown(void)
-{
-	gHUD.Shutdown();
-	Input_Shutdown();
-}
-
-
-/*
 ================================
 HUD_GetHullBounds
 
