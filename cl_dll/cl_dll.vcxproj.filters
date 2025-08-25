@@ -419,9 +419,6 @@
     <ClInclude Include="cl_dll.h">
       <Filter>Файлы заголовков\cl_dll</Filter>
     </ClInclude>
-    <ClInclude Include="cl_util.h">
-      <Filter>Файлы заголовков\cl_dll</Filter>
-    </ClInclude>
     <ClInclude Include="com_weapons.h">
       <Filter>Файлы заголовков\cl_dll</Filter>
     </ClInclude>
@@ -519,6 +516,9 @@
       <Filter>Файлы заголовков\cl_dll</Filter>
     </ClInclude>
     <ClInclude Include="events.h">
+      <Filter>Файлы заголовков\cl_dll</Filter>
+    </ClInclude>
+    <ClInclude Include="util_vector.h">
       <Filter>Файлы заголовков\cl_dll</Filter>
     </ClInclude>
   </ItemGroup>

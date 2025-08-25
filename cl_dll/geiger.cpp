@@ -49,11 +49,10 @@ int CHudGeiger::VidInit(void)
 
 int CHudGeiger::MsgFunc_Geiger(const char *pszName,  int iSize, void *pbuf)
 {
-
-	BEGIN_READ( pbuf, iSize );
+	BufferReader reader(pszName, pbuf, iSize);
 
 	// update geiger data
-	m_iGeigerRange = READ_BYTE();
+	m_iGeigerRange = reader.ReadByte();
 	m_iGeigerRange = m_iGeigerRange << 2;
 	
 	m_iFlags |= HUD_ACTIVE;

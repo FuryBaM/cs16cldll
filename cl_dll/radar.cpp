@@ -32,7 +32,6 @@ version.
 #include "parsemsg.h"
 #include "draw_util.h"
 #include "triangleapi.h"
-#include "vgui_parser.h"
 #ifndef M_PI
 #define M_PI		3.14159265358979323846	// matches value in gcc v2 math.h
 #endif

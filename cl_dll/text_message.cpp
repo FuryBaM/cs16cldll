@@ -19,12 +19,13 @@
 //
 // this class routes messages through titles.txt for localisation
 //
+#include <cctype>
+
 #include "hud.h"
 #include "cl_util.h"
 #include <string.h>
 #include <stdio.h>
 #include "parsemsg.h"
-#include "vgui_parser.h"
 #include "ctype.h"
 #include "draw_util.h"
 
@@ -45,66 +46,57 @@ int CHudTextMessage::Init(void)
 // the new value is pushed into dst_buffer
 char* CHudTextMessage::LocaliseTextString(const char* msg, char* dst_buffer, int buffer_size)
 {
-	int len = buffer_size;
+	if (!msg || !dst_buffer || buffer_size <= 0)
+		return dst_buffer;
+
 	char* dst = dst_buffer;
-	for (char* src = (char*)msg; *src != 0 && buffer_size > 0; buffer_size--)
+	const char* src = msg;
+
+	auto putc = [&](char c) {
+		if (buffer_size > 1) { *dst++ = c; --buffer_size; }
+		};
+
+	while (*src && buffer_size > 1)
 	{
 		if (*src == '#')
 		{
-			// cut msg name out of string
-			static char word_buf[255];
-			char* wdst = word_buf, * word_start = src;
-			for (++src; (*src >= 'A' && *src <= 'z') || (*src >= '0' && *src <= '9'); wdst++, src++)
+			const char* word_start = ++src;
+			char word_buf[256]; int wi = 0;
+			while (*src&& wi < (int)sizeof(word_buf) - 1)
 			{
-				*wdst = *src;
+				unsigned char ch = (unsigned char)*src;
+				if (!(std::isalnum(ch) || ch == '_')) break;
+				word_buf[wi++] = *src++;
 			}
-			*wdst = 0;
+			word_buf[wi] = '\0';
 
-			// lookup msg name in titles.txt
+			if (wi == 0) { putc('#'); continue; }
+
 			client_textmessage_t* clmsg = TextMessageGet(word_buf);
-			if (!clmsg || !(clmsg->pMessage))
+			if (!clmsg || !clmsg->pMessage)
 			{
-				// look also in vgui2 translations
-				const char* str = Localize(word_buf);
-				if (str)
-				{
-					strncpy(dst, str, buffer_size);
-					buffer_size = 0;
-					continue;
-				}
-				else
-				{
-					src = word_start;
-					*dst = *src;
-					dst++, src++;
-					continue;
-				}
+				putc('#');
+				for (const char* p = word_buf; *p && buffer_size > 1; ++p) putc(*p);
+				continue;
 			}
 
 			if (clmsg->pMessage[0] == '#')
 			{
-				strncpy(dst, Localize(clmsg->pMessage + 1), buffer_size);
-				buffer_size = 0;
+				const char* repl = BufferedLocaliseTextString(clmsg->pMessage);
+				for (const char* p = repl; *p && buffer_size > 1; ++p) putc(*p);
 			}
 			else
 			{
-				// copy string into message over the msg name
-				for (char* wsrc = (char*)clmsg->pMessage; *wsrc != 0; wsrc++, dst++)
-				{
-					*dst = *wsrc;
-				}
-				*dst = 0;
+				for (const char* p = clmsg->pMessage; *p && buffer_size > 1; ++p) putc(*p);
 			}
 		}
 		else
 		{
-			*dst = *src;
-			dst++, src++;
-			*dst = 0;
+			putc(*src++);
 		}
 	}
 
-	dst_buffer[len - 1] = 0; // ensure null termination
+	*dst = '\0';
 	return dst_buffer;
 }
 
@@ -116,38 +108,28 @@ char* CHudTextMessage::BufferedLocaliseTextString(const char* msg)
 	return dst_buffer;
 }
 
-// Simplified version of LocaliseTextString;  assumes string is only one word
+// Simplified version of LocaliseTextString; assumes string is only one word
 char* CHudTextMessage::LookupString(char* msg, int* msg_dest)
 {
-	if (!msg)
-		return (char*)"";
+	if (!msg) return (char*)"";
 
-	// '#' character indicates this is a reference to a string in titles.txt, and not the string itself
 	if (msg[0] == '#')
 	{
-		// this is a message name, so look up the real message
 		client_textmessage_t* clmsg = TextMessageGet(msg + 1);
+		if (!clmsg || !clmsg->pMessage)
+			return msg;
 
-		if (!clmsg || !(clmsg->pMessage))
-			return (char*)msg; // lookup failed, so return the original string
-
-		if (msg_dest)
-		{
-			// check to see if titles.txt info overrides msg destination
-			// if clmsg->effect is less than 0, then clmsg->effect holds -1 * message_destination
-			if (clmsg->effect < 0)  // 
-				*msg_dest = -clmsg->effect;
-		}
+		if (msg_dest && clmsg->effect < 0)
+			*msg_dest = -clmsg->effect;
 
 		if (clmsg->pMessage[0] == '#')
-			return (char*)Localize(clmsg->pMessage + 1);
+			return (char*)gHUD.m_TextMessage.BufferedLocaliseTextString(clmsg->pMessage + 1);
 
 		return (char*)clmsg->pMessage;
 	}
-	else
-	{  // nothing special about this message, so just return the same string
-		return (char*)msg;
-	}
+
+	// обычная строка
+	return msg;
 }
 
 void StripEndNewlineFromString(char* str)

@@ -22,7 +22,6 @@
 #include <string.h>
 #include <stdio.h>
 #include "parsemsg.h"
-#include "vgui_parser.h"
 #include "draw_util.h"
 
 DECLARE_MESSAGE(m_Message, HudText);
@@ -471,7 +470,11 @@ void CHudMessage::MessageAdd(const char* pName, float time)
 			{
 				if (pName[0] == '#')
 				{
-					pName = Localize(pName + 1);
+					client_textmessage_t* msg = TextMessageGet(pName + 1);
+					if (msg && msg->pMessage)
+						pName = msg->pMessage;   // локализованная строка из titles.txt
+					else
+						pName = pName + 1;       // если не нашли, убираем '#'
 				}
 
 				// If we couldnt find it in the titles.txt, just create it

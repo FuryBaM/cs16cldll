@@ -29,7 +29,6 @@
 
 #include "demo.h"
 #include "demo_api.h"
-#include "vgui_parser.h"
 #include "rain.h"
 
 #include "camera.h"
@@ -350,10 +349,6 @@ void CHud :: Init( void )
 	m_flTime = 1.0;
 	m_iNoConsolePrint = 0;
 	m_szServerName[0] = 0;
-
-
-
-	Localize_Init();
 
 	// fullscreen overlays
 	m_SniperScope.Init();

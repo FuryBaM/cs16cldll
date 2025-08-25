@@ -30,7 +30,7 @@
 #define M_PI		3.14159265358979323846	// matches value in gcc v2 math.h
 #endif
 
-vec3_t vec3_origin( 0, 0, 0 );
+//vec3_t vec3_origin( 0, 0, 0 );
 
 double sqrt(double x);
 
@@ -93,27 +93,6 @@ float VectorNormalize (float *v)
 		
 	return length;
 
-}
-
-void VectorInverse ( float *v )
-{
-	v[0] = -v[0];
-	v[1] = -v[1];
-	v[2] = -v[2];
-}
-
-void VectorScale (const float *in, float scale, float *out)
-{
-	out[0] = in[0]*scale;
-	out[1] = in[1]*scale;
-	out[2] = in[2]*scale;
-}
-
-void VectorMA (const float *veca, float scale, const float *vecb, float *vecc)
-{
-	vecc[0] = veca[0] + scale*vecb[0];
-	vecc[1] = veca[1] + scale*vecb[1];
-	vecc[2] = veca[2] + scale*vecb[2];
 }
 
 HSPRITE LoadSprite(const char *pszName)

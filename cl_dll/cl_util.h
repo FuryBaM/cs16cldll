@@ -1,6 +1,6 @@
 /***
 *
-*	Copyright (c) 1999, Valve LLC. All rights reserved.
+*	Copyright (c) 1996-2002, Valve LLC. All rights reserved.
 *	
 *	This product contains software technology licensed from Id 
 *	Software, Inc. ("Id Technology").  Id Technology (c) 1996 Id Software, Inc. 
@@ -15,18 +15,19 @@
 //
 // cl_util.h
 //
-
+#pragma once
 #include "cvardef.h"
-
 #ifndef TRUE
 #define TRUE 1
 #define FALSE 0
 #endif
 
-#include <stdio.h> // for safe_sprintf()
-#include <stdarg.h>  // "
-#include <string.h> // for strncpy()
-#include <cl_dll.h>
+extern cvar_t *hud_textmode;
+
+#ifdef _MSC_VER
+#pragma warning(disable : 4244) // 'argument': conversion from 'float' to 'int', possible loss of data
+#pragma warning(disable : 4101) // unreferenced local variable
+#endif
 
 // Macros to hook function calls into the HUD object
 #define HOOK_MESSAGE(x) gEngfuncs.pfnHookUserMsg(#x, __MsgFunc_##x );
@@ -80,16 +81,13 @@ inline struct cvar_s *CVAR_CREATE( const char *cv, const char *val, const int fl
 #define TrueHeight (gHUD.m_truescrinfo.iHeight)
 #define TrueWidth (gHUD.m_truescrinfo.iWidth)
 
-#define BASE_XRES 640.f
+// Use this to set any co-ords in 640x480 space
+#define XRES(x)		((int)(float(x)  * ((float)ScreenWidth / 640.0f) + 0.5f))
+#define YRES(y)		((int)(float(y)  * ((float)ScreenHeight / 480.0f) + 0.5f))
 
 // use this to project world coordinates to screen coordinates
 #define XPROJECT(x)	( (1.0f+(x))*ScreenWidth*0.5f )
 #define YPROJECT(y) ( (1.0f-(y))*ScreenHeight*0.5f )
-
-#define XRES(x)					((x)  * ((float)ScreenWidth / 640))
-#define YRES(y)					((y)  * ((float)ScreenHeight / 480))
-#define XRES_HD(x)				((x)  * max(1.f, (float)ScreenWidth / 1280.f))
-#define YRES_HD(y)				((y)  * max(1.f, (float)ScreenHeight / 720.f))
 
 #define GetScreenInfo (*gEngfuncs.pfnGetScreenInfo)
 #define ServerCmd (*gEngfuncs.pfnServerCmd)
@@ -99,31 +97,22 @@ inline struct cvar_s *CVAR_CREATE( const char *cv, const char *val, const int fl
 #define Com_RandomLong (*gEngfuncs.pfnRandomLong)
 #define Com_RandomFloat (*gEngfuncs.pfnRandomFloat)
 
+extern float color[3]; // hud.cpp
+
+
 // Gets the height & width of a sprite,  at the specified frame
-inline int SPR_Height( HSPRITE x, int f )	{ return gEngfuncs.pfnSPR_Height(x, f); }
-inline int SPR_Width( HSPRITE x, int f )	{ return gEngfuncs.pfnSPR_Width(x, f); }
-
-inline 	client_textmessage_t	*TextMessageGet( const char *pName ) { return gEngfuncs.pfnTextMessageGet( pName ); }
-inline 	int						TextMessageDrawChar( int x, int y, int number, int r, int g, int b ) 
-{ 
-	return gEngfuncs.pfnDrawCharacter( x, y, number, r, g, b ); 
+inline int SPR_Height( HSPRITE x, int f = 0 )
+{
+	return gEngfuncs.pfnSPR_Height(x, f);
+}
+inline int SPR_Width( HSPRITE x, int f = 0 )
+{
+	return gEngfuncs.pfnSPR_Width(x, f);
 }
 
-inline int DrawConsoleString( int x, int y, const char *string )
+inline client_textmessage_t *TextMessageGet( const char *pName )
 {
-	return gEngfuncs.pfnDrawConsoleString( x, y, (char*) string );
-}
-
-inline void GetConsoleStringSize( const char *string, int *width, int *height )
-{
-	gEngfuncs.pfnDrawConsoleStringLen( string, width, height );
-}
-
-inline int ConsoleStringLen( const char *string )
-{
-	int _width, _height;
-	GetConsoleStringSize( string, &_width, &_height );
-	return _width;
+	return gEngfuncs.pfnTextMessageGet( pName );
 }
 
 inline void ConsolePrint( const char *string )
@@ -136,92 +125,57 @@ inline void CenterPrint( const char *string )
 	gEngfuncs.pfnCenterPrint( string );
 }
 
-
-inline char *safe_strcpy( char *dst, const char *src, int len_dst)
-{
-	if( len_dst <= 0 )
-	{
-		return NULL; // this is bad
-	}
-
-	strncpy(dst,src,len_dst);
-	dst[ len_dst - 1 ] = '\0';
-
-	return dst;
-}
-
-inline int safe_sprintf( char *dst, int len_dst, const char *format, ...)
-{
-	if( len_dst <= 0 )
-	{
-		return -1; // this is bad
-	}
-
-	va_list v;
-
-    va_start(v, format);
-
-	_vsnprintf(dst,len_dst,format,v);
-
-	va_end(v);
-
-	dst[ len_dst - 1 ] = '\0';
-
-	return 0;
-}
-
+// returns the players name of entity no.
 #define GetPlayerInfo (*gEngfuncs.pfnGetPlayerInfo)
 
-#ifdef PlaySound
-#undef PlaySound
-#endif
-#ifdef sndPlaySound
-#undef sndPlaySound
-#endif
 // sound functions
-inline void PlaySound(const char* szSound, float vol) { gEngfuncs.pfnPlaySoundByName(szSound, vol); }
-inline void PlaySound(int iSound, float vol) { gEngfuncs.pfnPlaySoundByIndex(iSound, vol); }
+inline void PlaySound( const char *szSound, float vol ) { gEngfuncs.pfnPlaySoundByName( szSound, vol ); }
+inline void PlaySound( int iSound, float vol ) { gEngfuncs.pfnPlaySoundByIndex( iSound, vol ); }
 
+#define max(a, b)  (((a) > (b)) ? (a) : (b))
+#define min(a, b)  (((a) < (b)) ? (a) : (b))
+#if !defined(__APPLE__) && !defined(_WIN32)
 #define fabs(x)	   ((x) > 0 ? (x) : 0 - (x))
-
-void ScaleColors( int &r, int &g, int &b, int a );
-
+#endif
 #define DotProduct(x,y) ((x)[0]*(y)[0]+(x)[1]*(y)[1]+(x)[2]*(y)[2])
 #define VectorSubtract(a,b,c) {(c)[0]=(a)[0]-(b)[0];(c)[1]=(a)[1]-(b)[1];(c)[2]=(a)[2]-(b)[2];}
 #define VectorAdd(a,b,c) {(c)[0]=(a)[0]+(b)[0];(c)[1]=(a)[1]+(b)[1];(c)[2]=(a)[2]+(b)[2];}
 #define VectorCopy(a,b) {(b)[0]=(a)[0];(b)[1]=(a)[1];(b)[2]=(a)[2];}
 inline void VectorClear(float *a) { a[0]=0.0;a[1]=0.0;a[2]=0.0;}
-float Length(const float *v);
-void VectorMA (const float *veca, float scale, const float *vecb, float *vecc);
-void VectorScale (const float *in, float scale, float *out);
+#define DotProduct(x,y) ((x)[0]*(y)[0]+(x)[1]*(y)[1]+(x)[2]*(y)[2])
+#define VectorLength(a) ( sqrt( DotProduct( a, a )))
+#define VectorMA(a, scale, b, c) ((c)[0] = (a)[0] + (scale) * (b)[0],(c)[1] = (a)[1] + (scale) * (b)[1],(c)[2] = (a)[2] + (scale) * (b)[2])
+#define VectorScale(in, scale, out) ((out)[0] = (in)[0] * (scale),(out)[1] = (in)[1] * (scale),(out)[2] = (in)[2] * (scale))
 float VectorNormalize (float *v);
-void VectorInverse ( float *v );
+#define VectorInverse(x) ((x)[0] = -(x)[0], (x)[1] = -(x)[1], (x)[2] = -(x)[2])
 
-extern vec3_t vec3_origin;
+extern float vec3_origin[3];
 
+#ifdef _MSC_VER
 // disable 'possible loss of data converting float to int' warning message
 #pragma warning( disable: 4244 )
 // disable 'truncation from 'const double' to 'float' warning message
 #pragma warning( disable: 4305 )
+#endif
 
-inline void UnpackRGB(int &r, int &g, int &b, unsigned long ulRGB)\
+inline void UnpackRGB(int& r, int& g, int& b, unsigned long ulRGB)\
 {\
-	r = (ulRGB & 0xFF0000) >>16;\
+	r = (ulRGB & 0xFF0000) >> 16;\
 	g = (ulRGB & 0xFF00) >> 8;\
 	b = ulRGB & 0xFF;\
 }
 
-float* GetClientColor(int clientIndex);
-HSPRITE LoadSprite(const char *pszName);
+float *GetClientColor( int clientIndex );
+HSPRITE LoadSprite(const char* pszName);
 
 extern vec3_t g_ColorRed, g_ColorBlue, g_ColorYellow, g_ColorGrey, g_ColorGreen;
 
-inline void GetTeamColor(int& r, int& g, int& b, int teamIndex)
+inline void GetTeamColor( int &r, int &g, int &b, int teamIndex )
 {
 	r = 255;
 	g = 255;
 	b = 255;
-	switch (teamIndex)
+	switch( teamIndex )
 	{
 	case TEAM_TERRORIST:
 		r *= g_ColorRed[0];
@@ -246,6 +200,7 @@ inline void GetTeamColor(int& r, int& g, int& b, int teamIndex)
 		break;
 	}
 }
+
 #define bound( min, num, max ) ((num) >= (min) ? ((num) < (max) ? (num) : (max)) : (min))
 #define RAD2DEG( x )	((float)(x) * (float)(180.f / M_PI))
 #define DEG2RAD( x )	((float)(x) * (float)(M_PI / 180.f))

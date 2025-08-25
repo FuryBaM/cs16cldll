@@ -12,8 +12,24 @@
 *   without written permission from Valve LLC.
 *
 ****/
+//  Vector.h
+// A subset of the extdll.h in the project HL Entity DLL
+//
+#pragma once
 #ifndef VECTOR_H
 #define VECTOR_H
+
+// Misc C-runtime library headers
+#include "stdio.h"
+#include "stdlib.h"
+#include "math.h"
+
+float rsqrt( float x );
+
+// Header file containing definition of globalvars_t and entvars_t
+typedef int	func_t;					//
+typedef int	string_t;				// from engine's pr_comp.h;
+typedef float vec_t;				// needed before including progdefs.h
 
 //=========================================================
 // 2DVector - used for many pathfinding and many other 
@@ -29,22 +45,13 @@ public:
 	inline Vector2D operator*(float fl)				const	{ return Vector2D(x*fl, y*fl);	}
 	inline Vector2D operator/(float fl)				const	{ return Vector2D(x/fl, y/fl);	}
 	
-	inline float Length(void)						const	{ return sqrt(x*x + y*y );		}
+	inline float Length(void)						const	{ return (float)sqrt(x*x + y*y );		}
 
 	inline Vector2D Normalize ( void ) const
 	{
-		Vector2D vec2;
-
-		float flLen = Length();
-		if ( flLen == 0 )
-		{
-			return Vector2D( 0, 0 );
-		}
-		else
-		{
-			flLen = 1 / flLen;
-			return Vector2D( x * flLen, y * flLen );
-		}
+		float flLen = rsqrt( x * x + y * y );
+		if ( flLen == 0 ) return Vector2D( 0.0f, 0.0f );
+		else return Vector2D( x * flLen, y * flLen );
 	}
 
 	vec_t	x, y;
@@ -62,8 +69,8 @@ public:
 	// Construction/destruction
 	inline Vector(void)								{ }
 	inline Vector(float X, float Y, float Z)		{ x = X; y = Y; z = Z;						}
-	//inline Vector(double X, double Y, double Z)		{ x = (float)X; y = (float)Y; z = (float)Z;	}
-	//inline Vector(int X, int Y, int Z)				{ x = (float)X; y = (float)Y; z = (float)Z;	}
+	inline Vector(double X, double Y, double Z)		{ x = (float)X; y = (float)Y; z = (float)Z;	}
+	inline Vector(int X, int Y, int Z)				{ x = (float)X; y = (float)Y; z = (float)Z;	}
 	inline Vector(const Vector& v)					{ x = v.x; y = v.y; z = v.z;				} 
 	inline Vector(float rgfl[3])					{ x = rgfl[0]; y = rgfl[1]; z = rgfl[2];	}
 
@@ -78,27 +85,34 @@ public:
 	
 	// Methods
 	inline void CopyToArray(float* rgfl) const		{ rgfl[0] = x, rgfl[1] = y, rgfl[2] = z; }
-	inline float Length(void) const					{ return sqrt(x*x + y*y + z*z); }
+	inline float Length(void) const					{ return (float)sqrt(x*x + y*y + z*z); }
 	operator float *()								{ return &x; } // Vectors will now automatically convert to float * when needed
 	operator const float *() const					{ return &x; } // Vectors will now automatically convert to float * when needed
 	inline Vector Normalize(void) const
 	{
-		float flLen = Length();
+		/*float flLen = Length();
 		if (flLen == 0) return Vector(0,0,1); // ????
-		flLen = 1 / flLen;
+		flLen = 1 / flLen;*/
+
+		float flLen = rsqrt( x * x + y * y + z * z );
+		if( flLen == 0.0f ) return Vector( 0, 0, 1 ); // ????
 		return Vector(x * flLen, y * flLen, z * flLen);
+	}
+
+	inline Vector NormalizeLength( float &len ) const
+	{
+		len = Length();
+		if( len == 0.0f ) return Vector( 0, 0, 1 );
+
+		return Vector( x / len, y / len, z / len );
 	}
 
 	inline Vector2D Make2D ( void ) const
 	{
-		Vector2D	Vec2;
-
-		Vec2.x = x;
-		Vec2.y = y;
-
-		return Vec2;
+		return Vector2D( x, y );
 	}
-	inline float Length2D(void) const					{ return sqrt(x*x + y*y); }
+	inline float Length2D(void) const					{ return (float)sqrt(x*x + y*y); }
+	inline bool IsNull(void) const { return !x && !y && !z; }
 
 	// Members
 	vec_t x, y, z;
@@ -106,23 +120,6 @@ public:
 inline Vector operator*(float fl, const Vector& v)	{ return v * fl; }
 inline float DotProduct(const Vector& a, const Vector& b) { return(a.x*b.x+a.y*b.y+a.z*b.z); }
 inline Vector CrossProduct(const Vector& a, const Vector& b) { return Vector( a.y*b.z - a.z*b.y, a.z*b.x - a.x*b.z, a.x*b.y - a.y*b.x ); }
-inline Vector RotateVectorZ(const Vector& a, int angle)
-{
-	float x_old, y_old, R_angle;
-
-	Vector new_vector;
-	x_old = a.x;
-	y_old = a.y;
-
-	R_angle = (float)(angle * (3.141517 / 180));
-
-	new_vector.x = (float)(x_old * cos(R_angle) - y_old * sin(R_angle));
-	new_vector.y = (float)(y_old * cos(R_angle) + x_old * sin(R_angle));
-	new_vector.z = 0;
-	return new_vector;
-}
 
 #define vec3_t Vector
-
-
-#endif
+#endif // VECTOR_H
