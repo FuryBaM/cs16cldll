@@ -35,6 +35,7 @@ version.
 #ifndef M_PI
 #define M_PI		3.14159265358979323846	// matches value in gcc v2 math.h
 #endif
+#include <voice_status.h>
 
 static byte	r_RadarCross[8][8] =
 {

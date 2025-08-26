@@ -250,7 +250,7 @@ void CL_DLLEXPORT HUD_Frame(double time)
 	gEngfuncs.VGui_ViewportPaintBackground(HUD_GetRect());
 #endif
 
-	GetClientVoice()->Frame(time);
+	GetClientVoiceMgr()->Frame(time);
 }
 
 
@@ -280,7 +280,7 @@ void CL_DLLEXPORT HUD_VoiceStatus(int entindex, qboolean bTalking)
 		}
 	}
 
-	GetClientVoice()->UpdateSpeakerStatus(entindex, bTalking);
+	GetClientVoiceMgr()->UpdateSpeakerStatus(entindex, bTalking);
 }
 
 /*
@@ -421,25 +421,25 @@ public:
 	// ingame voice manipulation
 	virtual bool IsPlayerGameVoiceMuted(int playerIndex)
 	{
-		if (GetClientVoice())
-			return GetClientVoice()->IsPlayerBlocked(playerIndex);
+		if (GetClientVoiceMgr())
+			return GetClientVoiceMgr()->IsPlayerBlocked(playerIndex);
 
 		return false;
 	}
 
 	virtual void MutePlayerGameVoice(int playerIndex)
 	{
-		if (GetClientVoice())
+		if (GetClientVoiceMgr())
 		{
-			GetClientVoice()->SetPlayerBlockedState(playerIndex, true);
+			GetClientVoiceMgr()->SetPlayerBlockedState(playerIndex, true);
 		}
 	}
 
 	virtual void UnmutePlayerGameVoice(int playerIndex)
 	{
-		if (GetClientVoice())
+		if (GetClientVoiceMgr())
 		{
-			GetClientVoice()->SetPlayerBlockedState(playerIndex, false);
+			GetClientVoiceMgr()->SetPlayerBlockedState(playerIndex, false);
 		}
 	}
 };

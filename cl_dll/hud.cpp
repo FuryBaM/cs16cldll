@@ -312,6 +312,7 @@ void CHud :: Init( void )
 	cl_weapon_sparks = CVAR_CREATE( "cl_weapon_sparks", "1", FCVAR_ARCHIVE );
 	cl_weapon_wallpuff = CVAR_CREATE( "cl_weapon_wallpuff", "1", FCVAR_ARCHIVE );
 	zoom_sens_ratio = CVAR_CREATE( "zoom_sensitivity_ratio", "1.2", 0 );
+	m_pCvarStealMouse = CVAR_CREATE("hud_capturemouse", "1", FCVAR_ARCHIVE);
 
 	cl_charset = gEngfuncs.pfnGetCvarPointer( "cl_charset" );
 	con_charset = gEngfuncs.pfnGetCvarPointer( "con_charset" );
@@ -387,7 +388,7 @@ void CHud :: Init( void )
 	m_Menu.Init();
 	m_Scoreboard.Init();
 
-	GetClientVoice()->Init( &g_VoiceStatusHelper );
+	GetClientVoiceMgr()->Init( &g_VoiceStatusHelper, nullptr);
 
 	InitRain();
 

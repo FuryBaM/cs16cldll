@@ -49,8 +49,6 @@
     <ClCompile Include="..\game_shared\vgui_scrollbar2.cpp" />
     <ClCompile Include="..\game_shared\vgui_slider2.cpp" />
     <ClCompile Include="..\game_shared\voice_banmgr.cpp" />
-    <ClCompile Include="..\game_shared\voice_status.cpp" />
-    <ClCompile Include="..\game_shared\voice_status_hud.cpp" />
     <ClCompile Include="..\pm_shared\pm_debug.cpp" />
     <ClCompile Include="..\pm_shared\pm_math.cpp" />
     <ClCompile Include="..\pm_shared\pm_shared.cpp" />
@@ -138,14 +136,26 @@
     <ClCompile Include="train.cpp" />
     <ClCompile Include="tri.cpp" />
     <ClCompile Include="util.cpp" />
+    <ClCompile Include="vgui_ClassMenu.cpp" />
+    <ClCompile Include="vgui_ConsolePanel.cpp" />
+    <ClCompile Include="vgui_ControlConfigPanel.cpp" />
+    <ClCompile Include="vgui_CustomObjects.cpp" />
+    <ClCompile Include="vgui_int.cpp" />
+    <ClCompile Include="vgui_MOTDWindow.cpp" />
+    <ClCompile Include="vgui_SchemeManager.cpp" />
+    <ClCompile Include="vgui_ScorePanel.cpp" />
+    <ClCompile Include="vgui_ServerBrowser.cpp" />
+    <ClCompile Include="vgui_SpectatorPanel.cpp" />
+    <ClCompile Include="vgui_TeamFortressViewport.cpp" />
+    <ClCompile Include="vgui_teammenu.cpp" />
     <ClCompile Include="view.cpp" />
+    <ClCompile Include="voice_status.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\common\parsemsg.h" />
     <ClInclude Include="..\game_shared\vgui_scrollbar2.h" />
     <ClInclude Include="..\game_shared\vgui_slider2.h" />
     <ClInclude Include="..\game_shared\voice_banmgr.h" />
-    <ClInclude Include="..\game_shared\voice_status.h" />
     <ClInclude Include="..\pm_shared\pm_debug.h" />
     <ClInclude Include="..\pm_shared\pm_defs.h" />
     <ClInclude Include="..\pm_shared\pm_info.h" />
@@ -166,6 +176,7 @@
     <ClInclude Include="ev_hldm.h" />
     <ClInclude Include="Exports.h" />
     <ClInclude Include="GameStudioModelRenderer.h" />
+    <ClInclude Include="global_consts.h" />
     <ClInclude Include="health.h" />
     <ClInclude Include="hud.h" />
     <ClInclude Include="hud_servers.h" />
@@ -179,7 +190,16 @@
     <ClInclude Include="StudioModelRenderer.h" />
     <ClInclude Include="tri.h" />
     <ClInclude Include="util_vector.h" />
+    <ClInclude Include="vgui_ConsolePanel.h" />
+    <ClInclude Include="vgui_ControlConfigPanel.h" />
+    <ClInclude Include="vgui_int.h" />
+    <ClInclude Include="vgui_SchemeManager.h" />
+    <ClInclude Include="vgui_ScorePanel.h" />
+    <ClInclude Include="vgui_ServerBrowser.h" />
+    <ClInclude Include="vgui_SpectatorPanel.h" />
+    <ClInclude Include="vgui_TeamFortressViewport.h" />
     <ClInclude Include="view.h" />
+    <ClInclude Include="voice_status.h" />
     <ClInclude Include="wrect.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

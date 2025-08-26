@@ -228,7 +228,7 @@ void CL_DLLEXPORT HUD_CreateEntities(void)
 {
 	// Add in any game specific objects
 
-	GetClientVoiceHud()->CreateEntities();
+	GetClientVoiceMgr()->CreateEntities();
 }
 
 /*
