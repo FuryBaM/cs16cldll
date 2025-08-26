@@ -1,26 +1,46 @@
-//========= Copyright © 1996-2002, Valve LLC, All rights reserved. ============
+//========= Copyright ? 1996-2002, Valve LLC, All rights reserved. ============
 //
-// Purpose: 
+// Purpose:
 //
 // $NoKeywords: $
 //=============================================================================
 
 // Triangle rendering, if any
-
 #include "hud.h"
 #include "cl_util.h"
 
 // Triangle rendering apis are in gEngfuncs.pTriAPI
-
 #include "const.h"
 #include "entity_state.h"
 #include "cl_entity.h"
 #include "triangleapi.h"
-#include "Exports.h"
+#include "rain.h"
 
-#include "particleman.h"
-#include "tri.h"
-extern IParticleMan *g_pParticleMan;
+extern int g_iWaterLevel;
+
+FogParameters g_FogParameters;
+
+void RenderFog()
+{
+	FogParameters fog;
+
+	fog = g_FogParameters;
+
+	if( cl_fog_density )
+		fog.density = cl_fog_density->value;
+
+	if( cl_fog_r )
+		fog.color[0] = cl_fog_r->value;
+
+	if( cl_fog_g )
+		fog.color[1] = cl_fog_g->value;
+
+	if( cl_fog_b )
+		fog.color[2] = cl_fog_b->value;
+	
+	gEngfuncs.pTriAPI->FogParams( fog.density, fog.affectsSkyBox );
+	gEngfuncs.pTriAPI->Fog( fog.color, 100.0f, 2000.0f, g_iWaterLevel <= 1 ? fog.density > 0.0f : 0 );
+}
 
 /*
 =================
@@ -31,14 +51,8 @@ Non-transparent triangles-- add them here
 */
 void CL_DLLEXPORT HUD_DrawNormalTriangles( void )
 {
-//	RecClDrawNormalTriangles();
-
 	gHUD.m_Spectator.DrawOverview();
 }
-
-#if defined( _TFC )
-void RunEventList( void );
-#endif
 
 /*
 =================
@@ -47,14 +61,16 @@ HUD_DrawTransparentTriangles
 Render any triangles with transparent rendermode needs here
 =================
 */
+extern bool Rain_Initialized;
 void CL_DLLEXPORT HUD_DrawTransparentTriangles( void )
 {
-//	RecClDrawTransparentTriangles();
+	RenderFog();
 
-#if defined( _TFC )
-	RunEventList();
-#endif
-
-	if ( g_pParticleMan )
-		 g_pParticleMan->Update();
+	if( Rain_Initialized )
+	{
+		ProcessFXObjects();
+		ProcessRain();
+		DrawRain();
+		DrawFXObjects();
+	}
 }

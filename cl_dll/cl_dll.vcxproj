@@ -50,6 +50,7 @@
     <ClCompile Include="..\game_shared\vgui_slider2.cpp" />
     <ClCompile Include="..\game_shared\voice_banmgr.cpp" />
     <ClCompile Include="..\game_shared\voice_status.cpp" />
+    <ClCompile Include="..\game_shared\voice_status_hud.cpp" />
     <ClCompile Include="..\pm_shared\pm_debug.cpp" />
     <ClCompile Include="..\pm_shared\pm_math.cpp" />
     <ClCompile Include="..\pm_shared\pm_shared.cpp" />
@@ -60,9 +61,12 @@
     <ClCompile Include="battery.cpp" />
     <ClCompile Include="cdll_int.cpp" />
     <ClCompile Include="com_weapons.cpp" />
-    <ClCompile Include="cs_wpn\cs_weapons.cpp" />
+    <ClCompile Include="cs_wpn\cs_weapons.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="death.cpp" />
     <ClCompile Include="demo.cpp" />
+    <ClCompile Include="draw_util.cpp" />
     <ClCompile Include="entity.cpp" />
     <ClCompile Include="events.cpp" />
     <ClCompile Include="events\event_ak47.cpp" />
@@ -122,7 +126,9 @@
     <ClCompile Include="in_camera.cpp" />
     <ClCompile Include="menu.cpp" />
     <ClCompile Include="message.cpp" />
+    <ClCompile Include="nightvision.cpp" />
     <ClCompile Include="radar.cpp" />
+    <ClCompile Include="rain.cpp" />
     <ClCompile Include="saytext.cpp" />
     <ClCompile Include="statusbar.cpp" />
     <ClCompile Include="status_icons.cpp" />
@@ -144,6 +150,7 @@
     <ClInclude Include="..\pm_shared\pm_defs.h" />
     <ClInclude Include="..\pm_shared\pm_info.h" />
     <ClInclude Include="..\pm_shared\pm_materials.h" />
+    <ClInclude Include="..\pm_shared\pm_math.h" />
     <ClInclude Include="..\pm_shared\pm_movevars.h" />
     <ClInclude Include="..\pm_shared\pm_shared.h" />
     <ClInclude Include="ammo.h" />
@@ -157,6 +164,7 @@
     <ClInclude Include="events.h" />
     <ClInclude Include="eventscripts.h" />
     <ClInclude Include="ev_hldm.h" />
+    <ClInclude Include="Exports.h" />
     <ClInclude Include="GameStudioModelRenderer.h" />
     <ClInclude Include="health.h" />
     <ClInclude Include="hud.h" />
@@ -219,7 +227,7 @@
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>
       </SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;CLIENT_DLL;CLIENT_WEAPONS;HL_DLL;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;CLIENT_DLL;CLIENT_WEAPONS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE;client_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>Default</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
@@ -249,8 +257,8 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <AdditionalIncludeDirectories>$(SolutionDir)dlls;$(SolutionDir)cl_dll;$(SolutionDir)public;$(SolutionDir)common;$(SolutionDir)pm_shared;$(SolutionDir)engine;$(SolutionDir)utils\vgui\include;$(SolutionDir)game_shared;$(SolutionDir)external;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
-      <LanguageStandard_C>stdclatest</LanguageStandard_C>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard_C>Default</LanguageStandard_C>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
     </ClCompile>

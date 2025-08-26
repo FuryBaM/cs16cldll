@@ -37,6 +37,9 @@ void CHudSpectatorGui::Shutdown()
     // ничего
 }
 
+// spectator_gui.cpp
+void CHudSpectatorGui::UserCmd_ToggleSpectatorMenu() {}
+
 int CHudSpectatorGui::Draw(float flTime)
 {
     if (!g_iUser1)  // не в режиме спектатора
@@ -130,4 +133,20 @@ int CHudSpectatorGui::MsgFunc_SpecHealth2(const char* name, int size, void* buf)
     g_PlayerExtraInfo[cl].health = hp;
     m_iPlayerLastPointedAt = g_iUser2;
     return 1;
+}
+
+void CHudSpectatorGui::InitHUDData()
+{
+    m_bBombPlanted = false;
+    label.m_szMap[0] = '\0';
+}
+
+void CHudSpectatorGui::Reset()
+{
+    m_bBombPlanted = false;
+    if (m_menuFlags & ROOT_MENU)
+    {
+        UserCmd_ToggleSpectatorMenu(); // this will remove any submenus;
+        m_menuFlags = 0;
+    }
 }

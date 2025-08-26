@@ -211,3 +211,15 @@ enum
 	GAME_CZERO = 1,   // czero
 	GAME_CZERODS = 2  // ritual czero
 };
+
+inline const char* HLSDK_Localize(const char* token)
+{
+	if (token && token[0] == '#') {
+		client_textmessage_t* msg = gEngfuncs.pfnTextMessageGet(token + 1);
+		if (msg && msg->pMessage)
+			return msg->pMessage;
+	}
+	return token;
+}
+
+#define Localize(x) HLSDK_Localize(x)

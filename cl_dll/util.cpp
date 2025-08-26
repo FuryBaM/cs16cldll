@@ -134,6 +134,21 @@ float rsqrt(float number)
 	return y;
 }
 
+int HUD_GetSpriteIndexByName(const char* sz)
+{
+	return gHUD.GetSpriteIndex(sz);
+}
+
+HSPRITE HUD_GetSprite(int index)
+{
+	return gHUD.GetSprite(index);
+}
+
+wrect_t HUD_GetSpriteRect(int index)
+{
+	return gHUD.GetSpriteRect(index);
+}
+
 vec3_t g_ColorBlue = { 0.6, 0.8, 1.0 };
 vec3_t g_ColorRed = { 1.0, 0.25, 0.25 };
 vec3_t g_ColorGreen = { 0.0, 1.0, 0.0 };

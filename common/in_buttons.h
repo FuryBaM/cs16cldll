@@ -17,6 +17,7 @@
 #ifdef _WIN32
 #pragma once
 #endif
+#pragma warning(disable : 4005) // for IN_ definitions
 
 #define IN_ATTACK	(1 << 0)
 #define IN_JUMP		(1 << 1)

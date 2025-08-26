@@ -59,7 +59,7 @@ void  _VectorAdd(vec_t *veca, vec_t *vecb, vec_t *out);
 void  _VectorCopy(vec_t *in, vec_t *out);
 void  CrossProduct(const vec_t *v1, const vec_t *v2, vec_t *cross);
 
-float Length(const vec_t *v);
+float Length(const vec_t* v);
 float Distance(const vec_t *v1, const vec_t *v2);
 float VectorNormalize(vec_t *v);
 

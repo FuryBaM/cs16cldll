@@ -26,6 +26,7 @@
 *
 */
 #pragma once
+#include <cl_util.h>
 #ifndef DRAW_UTIL_H
 #define DRAW_UTIL_H
 // Drawing primitives

@@ -61,9 +61,6 @@
     <Filter Include="Исходные файлы\wpn_shared">
       <UniqueIdentifier>{730cc526-7232-4a0d-8270-f56e8b97a7e0}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Файлы заголовков\dlls">
-      <UniqueIdentifier>{1562687a-84a4-420f-bb95-e424603c4d77}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="view.cpp">
@@ -432,6 +429,18 @@
     <ClCompile Include="hud\nvg.cpp">
       <Filter>Исходные файлы\cl_dll</Filter>
     </ClCompile>
+    <ClCompile Include="nightvision.cpp">
+      <Filter>Исходные файлы\cl_dll</Filter>
+    </ClCompile>
+    <ClCompile Include="rain.cpp">
+      <Filter>Исходные файлы\cl_dll</Filter>
+    </ClCompile>
+    <ClCompile Include="draw_util.cpp">
+      <Filter>Исходные файлы\cl_dll</Filter>
+    </ClCompile>
+    <ClCompile Include="..\game_shared\voice_status_hud.cpp">
+      <Filter>Исходные файлы\game_shared</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ammo.h">
@@ -512,24 +521,6 @@
     <ClInclude Include="..\game_shared\vgui_slider2.h">
       <Filter>Файлы заголовков\game_shared</Filter>
     </ClInclude>
-    <ClInclude Include="..\pm_shared\pm_movevars.h">
-      <Filter>Файлы заголовков\pm_shared</Filter>
-    </ClInclude>
-    <ClInclude Include="..\pm_shared\pm_shared.h">
-      <Filter>Файлы заголовков\pm_shared</Filter>
-    </ClInclude>
-    <ClInclude Include="..\pm_shared\pm_debug.h">
-      <Filter>Файлы заголовков\pm_shared</Filter>
-    </ClInclude>
-    <ClInclude Include="..\pm_shared\pm_defs.h">
-      <Filter>Файлы заголовков\pm_shared</Filter>
-    </ClInclude>
-    <ClInclude Include="..\pm_shared\pm_info.h">
-      <Filter>Файлы заголовков\pm_shared</Filter>
-    </ClInclude>
-    <ClInclude Include="..\pm_shared\pm_materials.h">
-      <Filter>Файлы заголовков\pm_shared</Filter>
-    </ClInclude>
     <ClInclude Include="draw_util.h">
       <Filter>Файлы заголовков\cl_dll</Filter>
     </ClInclude>
@@ -547,6 +538,30 @@
     </ClInclude>
     <ClInclude Include="util_vector.h">
       <Filter>Файлы заголовков\cl_dll</Filter>
+    </ClInclude>
+    <ClInclude Include="Exports.h">
+      <Filter>Файлы заголовков\cl_dll</Filter>
+    </ClInclude>
+    <ClInclude Include="..\pm_shared\pm_debug.h">
+      <Filter>Файлы заголовков\pm_shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\pm_shared\pm_defs.h">
+      <Filter>Файлы заголовков\pm_shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\pm_shared\pm_info.h">
+      <Filter>Файлы заголовков\pm_shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\pm_shared\pm_materials.h">
+      <Filter>Файлы заголовков\pm_shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\pm_shared\pm_math.h">
+      <Filter>Файлы заголовков\pm_shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\pm_shared\pm_movevars.h">
+      <Filter>Файлы заголовков\pm_shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\pm_shared\pm_shared.h">
+      <Filter>Файлы заголовков\pm_shared</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

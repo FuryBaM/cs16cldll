@@ -17,7 +17,6 @@ extern "C"
 #include "camera.h"
 #include "in_defs.h"
 #include "view.h"
-#include "bench.h"
 #include <string.h>
 #include <ctype.h>
 #include "Exports.h"
@@ -29,7 +28,7 @@ extern int g_weaponselect;
 extern cl_enginefunc_t gEngfuncs;
 
 // Defined in pm_math.c
-extern "C" float anglemod( float a );
+float anglemod( float a );
 
 void IN_Init (void);
 void IN_Move ( float frametime, usercmd_t *cmd);
@@ -652,7 +651,7 @@ void CL_DLLEXPORT CL_CreateMove ( float frametime, struct usercmd_s *cmd, int ac
 	vec3_t viewangles;
 	static vec3_t oldangles;
 
-	if ( active && !Bench_Active() )
+	if ( active )
 	{
 		//memset( viewangles, 0, sizeof( vec3_t ) );
 		//viewangles[ 0 ] = viewangles[ 1 ] = viewangles[ 2 ] = 0.0;
@@ -749,8 +748,6 @@ void CL_DLLEXPORT CL_CreateMove ( float frametime, struct usercmd_s *cmd, int ac
 	{
 		VectorCopy( oldangles, cmd->viewangles );
 	}
-
-	Bench_SetViewAngles( 1, (float *)&cmd->viewangles, frametime, cmd );
 }
 
 /*

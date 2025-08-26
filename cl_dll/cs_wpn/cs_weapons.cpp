@@ -12,7 +12,6 @@
 *   without written permission from Valve LLC.
 *
 ****/
-
 #include "port.h"
 
 #include "wrect.h"
@@ -55,6 +54,7 @@
 #ifndef max
 #define max(a,b)  (((a) > (b)) ? (a) : (b))
 #endif
+class CBasePlayer; class CBaseMonster; struct entvars_s;
 
 // Globals used by game logic
 const Vector g_vecZero = Vector( 0, 0, 0 );

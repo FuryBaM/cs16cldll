@@ -36,7 +36,7 @@
 #ifndef M_PI
 #define M_PI		3.14159265358979323846	// matches value in gcc v2 math.h
 #endif
-#include <pm_shared.h>
+#include "pm_shared.h"
 
 extern float	vJumpOrigin[3];
 extern float	vJumpAngles[3];
@@ -227,7 +227,7 @@ float V_CalcRoll(vec3_t angles, vec3_t velocity, float rollangle, float rollspee
 	}
 	return side * sign;
 }
-#if 0
+
 typedef struct pitchdrift_s
 {
 	float		pitchvel;
@@ -326,7 +326,6 @@ void V_DriftPitch(struct ref_params_s* pparams)
 		pparams->cl_viewangles[PITCH] -= move;
 	}
 }
-#endif
 /*
 ==============================================================================
 						VIEW RENDERING

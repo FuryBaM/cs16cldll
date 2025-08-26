@@ -31,6 +31,10 @@
 cl_enginefunc_t		gEngfuncs = { };
 CHud gHUD;
 
+#include "particleman.h"
+CSysModule* g_hParticleManModule = NULL;
+IParticleMan* g_pParticleMan = NULL;
+
 void InitInput(void);
 void Game_HookEvents(void);
 void IN_Commands(void);
@@ -292,6 +296,48 @@ void CL_DLLEXPORT HUD_DirectorMessage(int iSize, void* pbuf)
 	gHUD.m_Spectator.DirectorMessage(iSize, pbuf);
 }
 
+void CL_UnloadParticleMan(void)
+{
+	Sys_UnloadModule(g_hParticleManModule);
+
+	g_pParticleMan = NULL;
+	g_hParticleManModule = NULL;
+}
+
+void CL_LoadParticleMan(void)
+{
+	char szPDir[512];
+
+	if (gEngfuncs.COM_ExpandFilename(PARTICLEMAN_DLLNAME, szPDir, sizeof(szPDir)) == FALSE)
+	{
+		g_pParticleMan = NULL;
+		g_hParticleManModule = NULL;
+		return;
+	}
+
+	g_hParticleManModule = Sys_LoadModule(szPDir);
+	CreateInterfaceFn particleManFactory = Sys_GetFactory(g_hParticleManModule);
+
+	if (particleManFactory == NULL)
+	{
+		g_pParticleMan = NULL;
+		g_hParticleManModule = NULL;
+		return;
+	}
+
+	g_pParticleMan = (IParticleMan*)particleManFactory(PARTICLEMAN_INTERFACE, NULL);
+
+	if (g_pParticleMan)
+	{
+		g_pParticleMan->SetUp(&gEngfuncs);
+
+		// Add custom particle classes here BEFORE calling anything else or you will die.
+		g_pParticleMan->AddCustomParticleClassSize(sizeof(CBaseParticle));
+	}
+}
+
+cldll_func_dst_t* g_pcldstAddrs;
+
 extern "C" void CL_DLLEXPORT HUD_ChatInputPosition(int* x, int* y)
 {
 }
@@ -302,10 +348,6 @@ extern "C" int CL_DLLEXPORT HUD_GetPlayerTeam(int iplayer)
 		return g_PlayerExtraInfo[iplayer].teamnumber;
 	return 0;
 }
-
-#include "APIProxy.h"
-
-cldll_func_dst_t* g_pcldstAddrs;
 
 extern "C" void CL_DLLEXPORT F(void* pv)
 {

@@ -23,11 +23,12 @@
 #include "eventscripts.h"
 #include "com_weapons.h"
 #include "ev_hldm.h"
-#include "Exports.h"
 
 extern vec3_t v_origin;
 
 int iOnTrain[MAX_PLAYERS];
+
+int g_iAlive = 1;
 
 /*
 ========================
@@ -83,7 +84,7 @@ structure, we need to copy them into the state structure at this point.
 void CL_DLLEXPORT HUD_TxferLocalOverrides(struct entity_state_s* state, const struct clientdata_s* client)
 {
 	VectorCopy(client->origin, state->origin);
-
+	
 	// Spectator
 	state->iuser1 = client->iuser1;
 	state->iuser2 = client->iuser2;
@@ -193,6 +194,7 @@ void CL_DLLEXPORT HUD_TxferPredictionData(struct entity_state_s* ps, const struc
 	pcd->tfstate = ppcd->tfstate;
 	pcd->maxspeed = ppcd->maxspeed;
 	pcd->deadflag = ppcd->deadflag;
+	g_iAlive = (ppcd->iuser1 || (pcd->deadflag == DEAD_NO)) ? 1 : 0;
 	if (gEngfuncs.IsSpectateOnly())
 	{
 		pcd->iuser1 = g_iUser1;	// observer mode
@@ -335,7 +337,7 @@ The entity's studio model description indicated an event was
 fired during this frame, handle the event by it's tag ( e.g., muzzleflash, sound )
 =========================
 */
-void CL_DLLEXPORT HUD_StudioEvent(const struct mstudioevent_s* event, struct cl_entity_s* entity)
+void CL_DLLEXPORT HUD_StudioEvent(const struct mstudioevent_s* event, const struct cl_entity_s* entity)
 {
 	// #define CL_MuzzleFlash( x, y, z ) gEngfuncs.pEfxAPI->R_MuzzleFlash( y, z )
 	switch (event->event)
