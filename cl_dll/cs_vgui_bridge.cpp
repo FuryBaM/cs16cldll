@@ -708,6 +708,14 @@ extern "C" void CS16VGUI_PaintBackground(int extents[4])
         gEngfuncs.VGui_ViewportPaintBackground(extents);
 }
 
+extern "C" float CS16VGUI_GetLayoutScale(void)
+{
+    // This client can render the HUD into a virtual resolution and upscale it
+    // to the real window. VGUI1 is upscaled with it, while VGUI2 .res values
+    // describe final pixel sizes, so compensate once while applying layout.
+    return gHUD.m_flScale > 0.0f ? 1.0f / gHUD.m_flScale : 1.0f;
+}
+
 extern "C" int CS16VGUI_Startup(int width, int height)
 {
 #if defined(_CS16CLIENT_ENABLE_VGUI1)

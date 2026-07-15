@@ -9,7 +9,9 @@
 #include <VGUI_ActionSignal.h>
 #include <VGUI_App.h>
 #include <VGUI_Button.h>
+#include <VGUI_Font.h>
 #include <VGUI_ImagePanel.h>
+#include <VGUI_InputSignal.h>
 #include <VGUI_Label.h>
 #include <VGUI_Panel.h>
 #include <VGUI_Scheme.h>
@@ -35,6 +37,7 @@ extern "C" void CS16VGUI_ClientCommand(const char* command);
 extern "C" void CS16VGUI_SetMouseVisible(int visible);
 extern "C" void CS16VGUI_Trace(const char* stage);
 extern "C" void CS16VGUI_PaintBackground(int extents[4]);
+extern "C" float CS16VGUI_GetLayoutScale(void);
 extern "C" int CS16VGUI_CommandMenuPrepare(void);
 extern "C" int CS16VGUI_CommandMenuGetCount(int node);
 extern "C" int CS16VGUI_CommandMenuGetParent(int node);
@@ -44,6 +47,23 @@ extern "C" void CS16VGUI_CommandMenuExecute(int itemIndex);
 
 namespace
 {
+static int LayoutValue(int value)
+{
+    const float scale = CS16VGUI_GetLayoutScale();
+    const int result = (int)(value * scale + 0.5f);
+    return value > 0 && result < 1 ? 1 : result;
+}
+
+static vgui::Font* MenuButtonFont()
+{
+    // The stock App scheme's sf_primary3 is the compact command-menu font.
+    // At a widescreen HUD scale it becomes much smaller than the 20-pixel
+    // button rows described by the Counter-Strike VGUI2 .res files.
+    static vgui::Font* font = new vgui::Font("Tahoma", LayoutValue(18), 0,
+        0.0f, 500, false, false, false, false);
+    return font;
+}
+
 enum
 {
     CS_MENU_TEAM = 2,
@@ -144,8 +164,10 @@ class CCSViewport;
 class CPreviewImagePanel final : public vgui::ImagePanel
 {
 public:
-    CPreviewImagePanel()
+    CPreviewImagePanel() : m_currentImage(NULL)
     {
+        // The parent menu already supplies the translucent surface. Painting
+        // an ImagePanel background creates a second opaque-looking rectangle.
         setPaintBackgroundEnabled(true);
         setVisible(false);
     }
@@ -155,15 +177,42 @@ public:
         if (!image)
             return;
 
+        if (m_currentImage == image && isVisible())
+            return;
+
         int panelWide = 0, panelTall = 0;
         int imageWide = 0, imageTall = 0;
         getPaintSize(panelWide, panelTall);
         image->getSize(imageWide, imageTall);
-        image->setPos((panelWide - imageWide) / 2, (panelTall - imageTall) / 2);
+
+        // ImagePanel::setImage associates the image with the panel and may
+        // reset its origin. Position it afterwards, centered at its native
+        // TGA size inside the ClassInfo/ItemInfo bounds from the .res file.
         setImage(image);
+        int imageX = (panelWide - imageWide) / 2;
+        int imageY = (panelTall - imageTall) / 2;
+        if (imageX < 0) imageX = 0;
+        if (imageY < 0) imageY = 0;
+        image->setPos(imageX, imageY);
+        m_currentImage = image;
         setVisible(true);
         repaint();
     }
+
+protected:
+    void paintBackground() override
+    {
+        // Steam's VGUI1 ImagePanel implementation does not reliably paint an
+        // image assigned after the panel has been attached to this custom
+        // viewport.  Paint the BitmapTGA explicitly; this is the same path
+        // used by the stock VGUI1 custom controls and keeps the image origin
+        // calculated above relative to the ClassInfo/ItemInfo .res bounds.
+        if (m_currentImage)
+            m_currentImage->doPaint(this);
+    }
+
+private:
+    vgui::BitmapTGA* m_currentImage;
 };
 
 class CMenuActionSignal final : public vgui::ActionSignal
@@ -189,16 +238,17 @@ private:
     int m_slot;
 };
 
-class CCSMenuButton : public vgui::Button
+class CCSMenuButton : public vgui::Button, public vgui::InputSignal
 {
 public:
     CCSMenuButton(const char* text, int x, int y, int wide, int tall)
         : vgui::Button(text, x, y, wide, tall), m_previewPanel(NULL),
-          m_previewImage(NULL)
+          m_previewImage(NULL), m_hovered(false)
     {
         m_previewPath[0] = '\0';
         setButtonBorderEnabled(false);
         setPaintBackgroundEnabled(true);
+        addInputSignal(this);
     }
 
     void SetPreview(CPreviewImagePanel* panel, const char* imageName)
@@ -229,34 +279,85 @@ public:
             m_previewPanel->ShowImage(m_previewImage);
     }
 
+    void cursorMoved(int, int, vgui::Panel*) override
+    {
+        // Some Steam VGUI1 builds do not arm custom Button subclasses from
+        // their internal controller. Mouse movement is a reliable fallback.
+        EnterHover();
+    }
+
+    void cursorEntered(vgui::Panel*) override
+    {
+        EnterHover();
+    }
+
+    void cursorExited(vgui::Panel*) override
+    {
+        if (!m_hovered)
+            return;
+        m_hovered = false;
+        setArmed(false);
+        repaint();
+    }
+
+    void mousePressed(vgui::MouseCode, vgui::Panel*) override {}
+    void mouseDoublePressed(vgui::MouseCode, vgui::Panel*) override {}
+    void mouseReleased(vgui::MouseCode, vgui::Panel*) override {}
+    void mouseWheeled(int, vgui::Panel*) override {}
+    void keyPressed(vgui::KeyCode, vgui::Panel*) override {}
+    void keyTyped(vgui::KeyCode, vgui::Panel*) override {}
+    void keyReleased(vgui::KeyCode, vgui::Panel*) override {}
+    void keyFocusTicked(vgui::Panel*) override {}
+
 protected:
     void paintBackground() override
     {
         int wide = 0, tall = 0;
         getPaintSize(wide, tall);
 
-        if (isArmed())
-        {
-            ShowPreview();
+        if (m_hovered || isArmed())
             drawSetColor(VELARON_ACCENT_R, VELARON_ACCENT_G,
                 VELARON_ACCENT_B, VELARON_HOVER_TRANSPARENCY);
-        }
         else if (isSelected())
             drawSetColor(VELARON_ACCENT_R, VELARON_ACCENT_G,
                 VELARON_ACCENT_B, VELARON_SELECTED_TRANSPARENCY);
         else
-            drawSetColor(0, 0, 0, VELARON_BUTTON_TRANSPARENCY);
+            drawSetColor(0, 0, 0, 255);
 
         drawFilledRect(0, 0, wide, tall);
-        drawSetColor(VELARON_ACCENT_R, VELARON_ACCENT_G, VELARON_ACCENT_B, 0);
-        drawOutlinedRect(0, 0, wide, tall);
     }
 
 private:
+    void EnterHover()
+    {
+        if (m_hovered)
+            return;
+        m_hovered = true;
+        setArmed(true);
+        ShowPreview();
+        repaint();
+    }
+
     CPreviewImagePanel* m_previewPanel;
     vgui::BitmapTGA* m_previewImage;
+    bool m_hovered;
     char m_previewPath[128];
 };
+
+static void RemoveButtonAccelerators(char* text)
+{
+    if (!text)
+        return;
+
+    char* output = text;
+    for (const char* input = text; *input; ++input)
+    {
+        if (*input == '&' && input[1])
+            continue;
+        *output++ = *input;
+    }
+    *output = '\0';
+}
 
 static const char* PreviewImageName(const char* fieldName)
 {
@@ -337,7 +438,7 @@ private:
         }
 
         HGDIOBJ oldBitmap = SelectObject(dc, bitmap);
-        HFONT font = CreateFontW(-16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        HFONT font = CreateFontW(-LayoutValue(16), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
             RUSSIAN_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Tahoma");
         HGDIOBJ oldFont = font ? SelectObject(dc, font) : NULL;
@@ -380,14 +481,15 @@ class CCSMenuPanel : public vgui::Panel
 {
 public:
     CCSMenuPanel(const char* titleText, int height, int width = 510)
-        : vgui::Panel(0, 0, width, height), m_buttonCount(0),
+        : vgui::Panel(0, 0, LayoutValue(width), LayoutValue(height)), m_buttonCount(0),
           m_decorationCount(0), m_titleBottom(50), m_resourceLayout(false),
           m_resourceXpos(0), m_resourceYpos(0), m_hasPreviewPanel(false)
     {
         setPaintBackgroundEnabled(true);
         m_preview = new CPreviewImagePanel();
         m_preview->setParent(this);
-        m_title = new vgui::Label(titleText, 20, 14, width - 40, 36);
+        m_title = new vgui::Label(titleText, LayoutValue(20), LayoutValue(14),
+            LayoutValue(width - 40), LayoutValue(36));
         m_title->setParent(this);
         m_title->setContentAlignment(vgui::Label::a_center);
         m_title->setFgColor(VELARON_ACCENT_R, VELARON_ACCENT_G, VELARON_ACCENT_B, 0);
@@ -407,9 +509,11 @@ protected:
     void AddButton(CCSViewport* viewport, const char* text, int y,
         const char* command, int targetMenu, int tall = 30)
     {
-        vgui::Button* button = new CCSMenuButton(text, 40, y, 430, tall);
+        vgui::Button* button = new CCSMenuButton(text, LayoutValue(40),
+            LayoutValue(y), LayoutValue(430), LayoutValue(tall));
         button->setParent(this);
         button->setContentAlignment(vgui::Label::a_west);
+        button->setFont(MenuButtonFont());
         button->setFgColor(VELARON_ACCENT_R, VELARON_ACCENT_G, VELARON_ACCENT_B, 0);
         button->addActionSignal(new CMenuActionSignal(viewport, command, targetMenu));
         if (m_buttonCount < (int)(sizeof(m_buttons) / sizeof(m_buttons[0])))
@@ -445,8 +549,8 @@ protected:
                 control.xpos >= 0 && control.ypos >= 0 &&
                 control.xpos < panelWide && control.ypos < panelTall)
             {
-                m_preview->setBounds(control.xpos, control.ypos,
-                    control.wide, control.tall);
+                m_preview->setBounds(LayoutValue(control.xpos), LayoutValue(control.ypos),
+                    LayoutValue(control.wide), LayoutValue(control.tall));
                 m_preview->setVisible(false);
                 m_hasPreviewPanel = true;
                 break;
@@ -462,9 +566,9 @@ protected:
                 !stricmp(control.controlName, "WizardSubPanel");
             if (isRoot && control.wide > 0 && control.tall > 0)
             {
-                setSize(control.wide, control.tall);
-                m_resourceXpos = control.xpos;
-                m_resourceYpos = control.ypos;
+                setSize(LayoutValue(control.wide), LayoutValue(control.tall));
+                m_resourceXpos = LayoutValue(control.xpos);
+                m_resourceYpos = LayoutValue(control.ypos);
                 continue;
             }
 
@@ -477,12 +581,14 @@ protected:
 
                 vgui::Button* button = m_buttons[resourceButton++];
                 if (control.wide > 0 && control.tall > 0)
-                    button->setBounds(control.xpos, control.ypos, control.wide, control.tall);
+                    button->setBounds(LayoutValue(control.xpos), LayoutValue(control.ypos),
+                        LayoutValue(control.wide), LayoutValue(control.tall));
 
                 if (control.labelText[0])
                 {
                     char text[256];
                     CS16VGUI_LocalizeResourceText(control.labelText, text, sizeof(text));
+                    RemoveButtonAccelerators(text);
                     button->setText(sizeof(text), text);
                 }
 
@@ -506,7 +612,8 @@ protected:
                  !stricmp(control.fieldName, "joinTeam") || !stricmp(control.fieldName, "joinClass")))
             {
                 if (control.wide > 0 && control.tall > 0)
-                    m_title->setBounds(control.xpos, control.ypos, control.wide, control.tall);
+                    m_title->setBounds(LayoutValue(control.xpos), LayoutValue(control.ypos),
+                        LayoutValue(control.wide), LayoutValue(control.tall));
                 if (control.labelText[0])
                 {
                     char text[256];
@@ -515,26 +622,20 @@ protected:
                 }
                 m_title->setContentAlignment(!stricmp(control.textAlignment, "center")
                     ? vgui::Label::a_center : vgui::Label::a_west);
-                m_titleBottom = control.ypos + control.tall;
+                m_titleBottom = LayoutValue(control.ypos + control.tall);
                 titleApplied = true;
                 continue;
             }
 
             const bool isDivider = !stricmp(control.controlName, "Divider");
-            const bool isInfoPanel = !stricmp(control.controlName, "Panel") ||
-                !stricmp(control.controlName, "HTML");
-            const bool isPreviewDecoration = m_hasPreviewPanel &&
-                !stricmp(control.controlName, "Panel") &&
-                (!stricmp(control.fieldName, "ClassInfo") ||
-                 !stricmp(control.fieldName, "ItemInfo"));
-            if ((isDivider || isInfoPanel) && (control.visible || isPreviewDecoration) && control.wide > 0 &&
+            if (isDivider && control.visible && control.wide > 0 &&
                 control.tall > 0 && m_decorationCount < (int)(sizeof(m_decorations) / sizeof(m_decorations[0])))
             {
                 Decoration& decoration = m_decorations[m_decorationCount++];
-                decoration.x = control.xpos;
-                decoration.y = control.ypos;
-                decoration.wide = control.wide;
-                decoration.tall = control.tall;
+                decoration.x = LayoutValue(control.xpos);
+                decoration.y = LayoutValue(control.ypos);
+                decoration.wide = LayoutValue(control.wide);
+                decoration.tall = LayoutValue(control.tall);
                 decoration.divider = isDivider;
             }
         }
@@ -556,19 +657,13 @@ protected:
         getPaintSize(wide, tall);
         drawSetColor(0, 0, 0, VELARON_PANEL_TRANSPARENCY);
         drawFilledRect(0, 0, wide, tall);
-        drawSetColor(VELARON_ACCENT_R, VELARON_ACCENT_G, VELARON_ACCENT_B, 0);
-        drawOutlinedRect(0, 0, wide, tall);
-        if (m_titleBottom > 0 && m_titleBottom < tall)
-            drawFilledRect(1, m_titleBottom, wide - 2, 1);
 
+        drawSetColor(VELARON_ACCENT_R, VELARON_ACCENT_G, VELARON_ACCENT_B, 0);
         for (int i = 0; i < m_decorationCount; ++i)
         {
             const Decoration& decoration = m_decorations[i];
-            if (decoration.divider)
-                drawFilledRect(decoration.x, decoration.y, decoration.wide, decoration.tall);
-            else
-                drawOutlinedRect(decoration.x, decoration.y,
-                    decoration.x + decoration.wide, decoration.y + decoration.tall);
+            drawFilledRect(decoration.x, decoration.y,
+                decoration.x + decoration.wide, decoration.y + decoration.tall);
         }
     }
 
@@ -668,7 +763,9 @@ public:
     {
         for (int i = 0; i < MAX_COMMAND_MENU_BUTTONS; ++i)
         {
-            CUnicodeCommandButton* button = new CUnicodeCommandButton(20, 48 + i * 30, 320, 27);
+            CUnicodeCommandButton* button = new CUnicodeCommandButton(
+                LayoutValue(20), LayoutValue(48 + i * 30),
+                LayoutValue(320), LayoutValue(27));
             button->setParent(this);
             button->addActionSignal(new CCommandSlotSignal(viewport, i));
             button->setVisible(false);
@@ -714,7 +811,7 @@ public:
         const int parent = CS16VGUI_CommandMenuGetParent(node);
         m_buttons[9]->SetUtf8Text(parent >= 0 || page > 0 ? "0  BACK" : "0  CLOSE");
         m_buttons[9]->setVisible(true);
-        setSize(360, 58 + MAX_COMMAND_MENU_BUTTONS * 30);
+        setSize(LayoutValue(360), LayoutValue(58 + MAX_COMMAND_MENU_BUTTONS * 30));
         CS16VGUI_Trace("VGUI1: command menu refresh complete");
         return count > 0 || parent >= 0;
     }
@@ -920,14 +1017,14 @@ private:
         for (int i = 0; i < m_panelCount; ++i)
         {
             int wide = 0, tall = 0; m_panels[i]->getSize(wide, tall);
-            if (m_panels[i] == m_commandMenu) { int y = (m_height - tall) / 3; if (y < 48) y = 48; m_panels[i]->setPos(20, y); }
+            if (m_panels[i] == m_commandMenu) { int y = (m_height - tall) / 3; if (y < LayoutValue(48)) y = LayoutValue(48); m_panels[i]->setPos(LayoutValue(20), y); }
             else
             {
                 int resourceX = 0, resourceY = 0;
                 if (m_panels[i]->GetResourcePosition(resourceX, resourceY))
                 {
-                    int canvasX = (m_width - 640) / 2;
-                    int canvasY = (m_height - 480) / 2;
+                    int canvasX = (m_width - LayoutValue(640)) / 2;
+                    int canvasY = (m_height - LayoutValue(480)) / 2;
                     if (canvasX < 0) canvasX = 0;
                     if (canvasY < 0) canvasY = 0;
                     m_panels[i]->setPos(canvasX + resourceX, canvasY + resourceY);
