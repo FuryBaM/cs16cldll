@@ -27,6 +27,7 @@ void __cdecl operator delete[](void* memory, unsigned int) noexcept { free(memor
 
 extern "C" void CS16VGUI_ClientCommand(const char* command);
 extern "C" void CS16VGUI_SetMouseVisible(int visible);
+extern "C" void CS16VGUI_Trace(const char* stage);
 extern "C" int CS16VGUI_CommandMenuPrepare(void);
 extern "C" int CS16VGUI_CommandMenuGetCount(int node);
 extern "C" int CS16VGUI_CommandMenuGetParent(int node);
@@ -337,6 +338,7 @@ public:
 
     bool Refresh(int node)
     {
+        CS16VGUI_Trace("VGUI1: command menu refresh enter");
         const int count = CS16VGUI_CommandMenuGetCount(node);
         const int parent = CS16VGUI_CommandMenuGetParent(node);
         int rows = count;
@@ -352,13 +354,15 @@ public:
                 continue;
             }
 
-            m_buttons[i]->setText(112, display ? display : "");
+            CS16VGUI_Trace("VGUI1: command menu set text enter");
+            m_buttons[i]->setText("%s", display ? display : "");
+            CS16VGUI_Trace("VGUI1: command menu set text complete");
             m_buttons[i]->setVisible(true);
         }
 
         if (parent >= 0 && rows < MAX_COMMAND_MENU_BUTTONS)
         {
-            m_buttons[rows]->setText(112, "0  BACK");
+            m_buttons[rows]->setText("%s", "0  BACK");
             m_buttons[rows]->setVisible(true);
             ++rows;
         }
@@ -367,6 +371,7 @@ public:
             m_buttons[i]->setVisible(false);
 
         setSize(360, 58 + rows * 30);
+        CS16VGUI_Trace("VGUI1: command menu refresh complete");
         return count > 0 || parent >= 0;
     }
 
@@ -440,14 +445,17 @@ public:
 
     int ShowCommandMenu()
     {
+        CS16VGUI_Trace("VGUI1: command menu show enter");
         if (m_currentMenu == CS_MENU_COMMAND)
         {
             HideMenu();
             return 0;
         }
 
+        CS16VGUI_Trace("VGUI1: command menu prepare enter");
         if (!CS16VGUI_CommandMenuPrepare())
             return 0;
+        CS16VGUI_Trace("VGUI1: command menu prepare complete");
 
         return ShowCommandNode(0);
     }
@@ -651,6 +659,7 @@ private:
         m_commandNode = node;
         UpdateCursor(true);
         repaint();
+        CS16VGUI_Trace("VGUI1: command menu show complete");
         return 1;
     }
 

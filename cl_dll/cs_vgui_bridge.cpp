@@ -7,6 +7,10 @@
 #include "cs_vgui.h"
 #include "cs_localize.h"
 
+#if defined(_WIN32)
+#include <windows.h>
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -82,6 +86,60 @@ void CopyCommandMenuText(char* destination, int destinationSize, const char* sou
     destination[destinationSize - 1] = '\0';
 }
 
+void CopyCommandMenuDisplayText(char* destination, int destinationSize, const char* source)
+{
+    if (!destination || destinationSize <= 0)
+        return;
+
+    if (!source)
+        source = "";
+
+#if defined(_WIN32)
+    // Steam's resource files are commonly UTF-8/UTF-16, while the legacy
+    // VGUI1 DLL renders narrow strings through an ANSI font. Passing raw
+    // multi-byte UTF-8 into vgui.dll can make its glyph lookup use invalid
+    // character indices. Convert valid UTF-8 labels to the matching legacy
+    // code page before they reach a VGUI1 Label.
+    bool hasHighByte = false;
+    for (const unsigned char* cursor = (const unsigned char*)source; *cursor; ++cursor)
+    {
+        if (*cursor >= 0x80)
+        {
+            hasHighByte = true;
+            break;
+        }
+    }
+
+    if (hasHighByte)
+    {
+        wchar_t wide[256];
+        const int wideLength = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
+            source, -1, wide, (int)(sizeof(wide) / sizeof(wide[0])));
+        if (wideLength > 0)
+        {
+            UINT codePage = GetACP();
+            for (int i = 0; i < wideLength; ++i)
+            {
+                if (wide[i] >= 0x0400 && wide[i] <= 0x052f)
+                {
+                    codePage = 1251;
+                    break;
+                }
+            }
+
+            if (WideCharToMultiByte(codePage, 0, wide, -1, destination,
+                destinationSize, NULL, NULL) > 0)
+            {
+                destination[destinationSize - 1] = '\0';
+                return;
+            }
+        }
+    }
+#endif
+
+    CopyCommandMenuText(destination, destinationSize, source);
+}
+
 int CreateCommandMenuNode(int parentNode)
 {
     if (g_commandMenuNodeCount >= MAX_COMMAND_MENU_NODES)
@@ -111,7 +169,7 @@ int AddCommandMenuItem(int node, char boundKey, const char* text,
     item.toggle = toggle;
 
     const char* localized = CS16_Localize(text ? text : "");
-    CopyCommandMenuText(item.text, sizeof(item.text), localized);
+    CopyCommandMenuDisplayText(item.text, sizeof(item.text), localized);
     CopyCommandMenuText(item.command, sizeof(item.command), command);
     CopyCommandMenuText(item.mapName, sizeof(item.mapName), mapName);
 
@@ -162,6 +220,8 @@ void ParseCommandMenuFile(void)
 
     char token[1024];
     char* cursor = (char*)source;
+    if (fileLength >= 3 && source[0] == 0xef && source[1] == 0xbb && source[2] == 0xbf)
+        cursor += 3;
     int currentNode = 0;
     int lastItem = -1;
 
@@ -385,14 +445,19 @@ void CS16VGUI_TestBuy_f()
 void CS16VGUI_CommandMenuPress_f()
 {
 #if defined(_CS16CLIENT_ENABLE_VGUI1)
+    CS16_StartupTrace("VGUI1: command menu press enter");
     g_commandMenuPressed = false;
     if (!CS16VGUI_IsAvailable())
+    {
+        CS16_StartupTrace("VGUI1: command menu unavailable");
         return;
+    }
 
     if (CS16VGUI_ImplShowCommandMenu())
     {
         g_commandMenuPressed = true;
         g_commandMenuOpenTime = gHUD.m_flTime;
+        CS16_StartupTrace("VGUI1: command menu press complete");
     }
 #endif
 }
@@ -519,6 +584,12 @@ extern "C" void CS16VGUI_Print(const char* text)
 {
     if (text && gEngfuncs.Con_Printf)
         gEngfuncs.Con_Printf("%s", text);
+}
+
+extern "C" void CS16VGUI_Trace(const char* stage)
+{
+    if (stage)
+        CS16_StartupTrace(stage);
 }
 
 extern "C" int CS16VGUI_Startup(int width, int height)
