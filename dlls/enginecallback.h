@@ -23,10 +23,22 @@ extern enginefuncs_t g_engfuncs;
 
 // The actual engine callbacks
 #define GETPLAYERUSERID (*g_engfuncs.pfnGetPlayerUserId)
+#define PRECACHE_GENERIC	(*g_engfuncs.pfnPrecacheGeneric)
+
+// Shared CS weapon code is also compiled into client.dll for prediction.
+// Weapon Spawn()/Precache() still executes there, but the server-only engine
+// callbacks do not exist in the client function table. Velaron's client SDK
+// deliberately turns these operations into no-ops; without this adapter the
+// first HUD_PostRunCmd dereferences a null pfnPrecacheModel and GoldSrc exits.
+#ifdef CLIENT_DLL
+inline int PRECACHE_MODEL(const char*) { return 0; }
+inline int PRECACHE_SOUND(const char*) { return 0; }
+#define SET_MODEL(entity, model) ((void)0)
+#else
 #define PRECACHE_MODEL	(*g_engfuncs.pfnPrecacheModel)
 #define PRECACHE_SOUND	(*g_engfuncs.pfnPrecacheSound)
-#define PRECACHE_GENERIC	(*g_engfuncs.pfnPrecacheGeneric)
 #define SET_MODEL		(*g_engfuncs.pfnSetModel)
+#endif
 #define MODEL_INDEX		(*g_engfuncs.pfnModelIndex)
 #define MODEL_FRAMES	(*g_engfuncs.pfnModelFrames)
 #define SET_SIZE		(*g_engfuncs.pfnSetSize)

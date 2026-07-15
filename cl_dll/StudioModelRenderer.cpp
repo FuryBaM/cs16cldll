@@ -1092,7 +1092,12 @@ void CStudioModelRenderer::StudioProcessGait(entity_state_t *pplayer)
 
 int CStudioModelRenderer::StudioDrawPlayer(int flags, entity_state_t *pplayer)
 {
+	if (!pplayer)
+		return 0;
+
 	m_pCurrentEntity = IEngineStudio.GetCurrentEntity();
+	if (!m_pCurrentEntity)
+		return 0;
 
 	IEngineStudio.GetTimes(&m_nFrameCount, &m_clTime, &m_clOldTime);
 	IEngineStudio.GetViewInfo(m_vRenderOrigin, m_vUp, m_vRight, m_vNormal);
@@ -1109,6 +1114,8 @@ int CStudioModelRenderer::StudioDrawPlayer(int flags, entity_state_t *pplayer)
 		return 0;
 
 	m_pStudioHeader = (studiohdr_t *)IEngineStudio.Mod_Extradata(m_pRenderModel);
+	if (!m_pStudioHeader)
+		return 0;
 
 	IEngineStudio.StudioSetHeader(m_pStudioHeader);
 	IEngineStudio.SetRenderModel(m_pRenderModel);
@@ -1117,6 +1124,8 @@ int CStudioModelRenderer::StudioDrawPlayer(int flags, entity_state_t *pplayer)
 	{
 		vec3_t orig_angles;
 		m_pPlayerInfo = IEngineStudio.PlayerInfo(m_nPlayerIndex);
+		if (!m_pPlayerInfo)
+			return 0;
 
 		VectorCopy(m_pCurrentEntity->angles, orig_angles);
 
@@ -1140,6 +1149,8 @@ int CStudioModelRenderer::StudioDrawPlayer(int flags, entity_state_t *pplayer)
 		m_pCurrentEntity->latched.prevcontroller[3] = m_pCurrentEntity->curstate.controller[3];
 
 		m_pPlayerInfo = IEngineStudio.PlayerInfo(m_nPlayerIndex);
+		if (!m_pPlayerInfo)
+			return 0;
 		m_pPlayerInfo->gaitsequence = 0;
 
 		StudioSetUpTransform(0);
@@ -1150,14 +1161,18 @@ int CStudioModelRenderer::StudioDrawPlayer(int flags, entity_state_t *pplayer)
 		if (!IEngineStudio.StudioCheckBBox())
 			return 0;
 
-		(*m_pModelsDrawn)++;
-		(*m_pStudioModelCount)++;
+		if (m_pModelsDrawn)
+			(*m_pModelsDrawn)++;
+		if (m_pStudioModelCount)
+			(*m_pStudioModelCount)++;
 
 		if (m_pStudioHeader->numbodyparts == 0)
 			return 1;
 	}
 
 	m_pPlayerInfo = IEngineStudio.PlayerInfo(m_nPlayerIndex);
+	if (!m_pPlayerInfo)
+		return 0;
 
 	StudioSetupBones();
 	StudioSaveBones();
@@ -1173,16 +1188,18 @@ int CStudioModelRenderer::StudioDrawPlayer(int flags, entity_state_t *pplayer)
 		if (m_pCurrentEntity->index > 0)
 		{
 			cl_entity_t *ent = gEngfuncs.GetEntityByIndex(m_pCurrentEntity->index);
-			memcpy(ent->attachment, m_pCurrentEntity->attachment, sizeof(vec3_t) * 4);
+			if (ent)
+				memcpy(ent->attachment, m_pCurrentEntity->attachment, sizeof(vec3_t) * 4);
 		}
 	}
 
 	if (flags & STUDIO_RENDER)
 	{
-		if (m_pCvarHiModels->value && m_pRenderModel != m_pCurrentEntity->model)
+		if (m_pCvarHiModels && m_pCvarHiModels->value && m_pRenderModel != m_pCurrentEntity->model)
 			m_pCurrentEntity->curstate.body = 255;
 
-		if (!(m_pCvarDeveloper->value == 0 && gEngfuncs.GetMaxClients() == 1) && (m_pRenderModel == m_pCurrentEntity->model))
+		if (m_pCvarDeveloper && !(m_pCvarDeveloper->value == 0 && gEngfuncs.GetMaxClients() == 1) &&
+			(m_pRenderModel == m_pCurrentEntity->model))
 			m_pCurrentEntity->curstate.body = 1;
 
 		alight_t lighting;
@@ -1194,6 +1211,8 @@ int CStudioModelRenderer::StudioDrawPlayer(int flags, entity_state_t *pplayer)
 		IEngineStudio.StudioSetupLighting(&lighting);
 
 		m_pPlayerInfo = IEngineStudio.PlayerInfo(m_nPlayerIndex);
+		if (!m_pPlayerInfo)
+			return 0;
 
 		m_nTopColor = m_pPlayerInfo->topcolor;
 
@@ -1218,21 +1237,26 @@ int CStudioModelRenderer::StudioDrawPlayer(int flags, entity_state_t *pplayer)
 
 		if (pplayer->weaponmodel)
 		{
+			studiohdr_t *saveheader = m_pStudioHeader;
 			cl_entity_t saveent = *m_pCurrentEntity;
 			model_t *pweaponmodel = IEngineStudio.GetModelByIndex(pplayer->weaponmodel);
+			studiohdr_t *weaponheader = pweaponmodel
+				? (studiohdr_t *)IEngineStudio.Mod_Extradata(pweaponmodel)
+				: NULL;
 
-			m_pStudioHeader = (studiohdr_t *)IEngineStudio.Mod_Extradata(pweaponmodel);
-			IEngineStudio.StudioSetHeader(m_pStudioHeader);
-
-			StudioMergeBones(pweaponmodel);
-
-			IEngineStudio.StudioSetupLighting(&lighting);
-
-			StudioRenderModel(dir);
-
-			StudioCalcAttachments();
+			if (weaponheader)
+			{
+				m_pStudioHeader = weaponheader;
+				IEngineStudio.StudioSetHeader(m_pStudioHeader);
+				StudioMergeBones(pweaponmodel);
+				IEngineStudio.StudioSetupLighting(&lighting);
+				StudioRenderModel(dir);
+				StudioCalcAttachments();
+			}
 
 			*m_pCurrentEntity = saveent;
+			m_pStudioHeader = saveheader;
+			IEngineStudio.StudioSetHeader(m_pStudioHeader);
 		}
 	}
 
@@ -1244,12 +1268,13 @@ void CStudioModelRenderer::StudioCalcAttachments(void)
 	int i;
 	mstudioattachment_t *pattachment;
 
-	if (m_pStudioHeader->numattachments > 4)
+	const int attachmentCount = min(m_pStudioHeader->numattachments, 4);
+	if (m_pStudioHeader->numattachments > attachmentCount)
 		gEngfuncs.Con_DPrintf("Too many attachments on %s\n", m_pCurrentEntity->model->name);
 
 	pattachment = (mstudioattachment_t *)((byte *)m_pStudioHeader + m_pStudioHeader->attachmentindex);
 
-	for (i = 0; i < m_pStudioHeader->numattachments; i++)
+	for (i = 0; i < attachmentCount; i++)
 		VectorTransform(pattachment[i].org, (*m_plighttransform)[pattachment[i].bone], m_pCurrentEntity->attachment[i]);
 }
 

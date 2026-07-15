@@ -81,6 +81,15 @@
     <ClCompile Include="cdll_int.cpp">
       <Filter>Исходные файлы\cl_dll</Filter>
     </ClCompile>
+    <ClCompile Include="cs_localize.cpp">
+      <Filter>Исходные файлы\cl_dll</Filter>
+    </ClCompile>
+    <ClCompile Include="cs_vgui_bridge.cpp">
+      <Filter>Исходные файлы\cl_dll</Filter>
+    </ClCompile>
+    <ClCompile Include="cs_vgui_viewport.cpp">
+      <Filter>Исходные файлы\cl_dll</Filter>
+    </ClCompile>
     <ClCompile Include="com_weapons.cpp">
       <Filter>Исходные файлы\cl_dll</Filter>
     </ClCompile>
@@ -178,27 +187,6 @@
       <Filter>Исходные файлы\common</Filter>
     </ClCompile>
     <ClCompile Include="..\game_shared\voice_banmgr.cpp">
-      <Filter>Исходные файлы\game_shared</Filter>
-    </ClCompile>
-    <ClCompile Include="..\game_shared\vgui_checkbutton2.cpp">
-      <Filter>Исходные файлы\game_shared</Filter>
-    </ClCompile>
-    <ClCompile Include="..\game_shared\vgui_grid.cpp">
-      <Filter>Исходные файлы\game_shared</Filter>
-    </ClCompile>
-    <ClCompile Include="..\game_shared\vgui_helpers.cpp">
-      <Filter>Исходные файлы\game_shared</Filter>
-    </ClCompile>
-    <ClCompile Include="..\game_shared\vgui_listbox.cpp">
-      <Filter>Исходные файлы\game_shared</Filter>
-    </ClCompile>
-    <ClCompile Include="..\game_shared\vgui_loadtga.cpp">
-      <Filter>Исходные файлы\game_shared</Filter>
-    </ClCompile>
-    <ClCompile Include="..\game_shared\vgui_scrollbar2.cpp">
-      <Filter>Исходные файлы\game_shared</Filter>
-    </ClCompile>
-    <ClCompile Include="..\game_shared\vgui_slider2.cpp">
       <Filter>Исходные файлы\game_shared</Filter>
     </ClCompile>
     <ClCompile Include="..\public\interface.cpp">
@@ -438,42 +426,6 @@
     <ClCompile Include="voice_status.cpp">
       <Filter>Исходные файлы\cl_dll</Filter>
     </ClCompile>
-    <ClCompile Include="vgui_ClassMenu.cpp">
-      <Filter>Исходные файлы\cl_dll</Filter>
-    </ClCompile>
-    <ClCompile Include="vgui_ConsolePanel.cpp">
-      <Filter>Исходные файлы\cl_dll</Filter>
-    </ClCompile>
-    <ClCompile Include="vgui_ControlConfigPanel.cpp">
-      <Filter>Исходные файлы\cl_dll</Filter>
-    </ClCompile>
-    <ClCompile Include="vgui_CustomObjects.cpp">
-      <Filter>Исходные файлы\cl_dll</Filter>
-    </ClCompile>
-    <ClCompile Include="vgui_int.cpp">
-      <Filter>Исходные файлы\cl_dll</Filter>
-    </ClCompile>
-    <ClCompile Include="vgui_MOTDWindow.cpp">
-      <Filter>Исходные файлы\cl_dll</Filter>
-    </ClCompile>
-    <ClCompile Include="vgui_SchemeManager.cpp">
-      <Filter>Исходные файлы\cl_dll</Filter>
-    </ClCompile>
-    <ClCompile Include="vgui_ScorePanel.cpp">
-      <Filter>Исходные файлы\cl_dll</Filter>
-    </ClCompile>
-    <ClCompile Include="vgui_ServerBrowser.cpp">
-      <Filter>Исходные файлы\cl_dll</Filter>
-    </ClCompile>
-    <ClCompile Include="vgui_SpectatorPanel.cpp">
-      <Filter>Исходные файлы\cl_dll</Filter>
-    </ClCompile>
-    <ClCompile Include="vgui_TeamFortressViewport.cpp">
-      <Filter>Исходные файлы\cl_dll</Filter>
-    </ClCompile>
-    <ClCompile Include="vgui_teammenu.cpp">
-      <Filter>Исходные файлы\cl_dll</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ammo.h">
@@ -486,6 +438,12 @@
       <Filter>Файлы заголовков\cl_dll</Filter>
     </ClInclude>
     <ClInclude Include="cl_dll.h">
+      <Filter>Файлы заголовков\cl_dll</Filter>
+    </ClInclude>
+    <ClInclude Include="cs_vgui.h">
+      <Filter>Файлы заголовков\cl_dll</Filter>
+    </ClInclude>
+    <ClInclude Include="cs_localize.h">
       <Filter>Файлы заголовков\cl_dll</Filter>
     </ClInclude>
     <ClInclude Include="com_weapons.h">

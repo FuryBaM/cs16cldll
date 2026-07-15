@@ -20,6 +20,7 @@ extern "C"
 #include <string.h>
 #include <ctype.h>
 #include "Exports.h"
+#include "cs_vgui.h"
 
 
 extern int g_iAlive;
@@ -36,6 +37,7 @@ void IN_Shutdown( void );
 void V_Init( void );
 void VectorAngles( const float *forward, float *angles );
 int CL_ButtonBits( int );
+bool CL_IsDead( void );
 
 // xxx need client dll function to get and clear impuse
 extern cvar_t *in_joystick;
@@ -365,6 +367,8 @@ Return 1 to allow engine to process the key, otherwise, act on it as needed
 int CL_DLLEXPORT HUD_Key_Event( int down, int keynum, const char *pszCurrentBinding )
 {
 //	RecClKeyEvent(down, keynum, pszCurrentBinding);
+	if (CS16VGUI_KeyInput(down, keynum, pszCurrentBinding))
+		return 0;
 
 	return 1;
 }
@@ -508,11 +512,13 @@ void IN_Impulse (void)
 void IN_ScoreDown(void)
 {
 	KeyDown(&in_score);
+	gHUD.m_Scoreboard.UserCmd_ShowScores();
 }
 
 void IN_ScoreUp(void)
 {
 	KeyUp(&in_score);
+	gHUD.m_Scoreboard.UserCmd_HideScores();
 }
 
 void IN_MLookUp (void)
@@ -644,8 +650,12 @@ if active == 1 then we are 1) not playing back demos ( where our commands are ig
 ================
 */
 void CL_DLLEXPORT CL_CreateMove ( float frametime, struct usercmd_s *cmd, int active )
-{	
+{
 //	RecClCL_CreateMove(frametime, cmd, active);
+	static bool tracedFirstActiveCreateMove = false;
+	const bool traceThisCall = (active && !tracedFirstActiveCreateMove) || CS16_RuntimeTraceEnabled();
+	if (traceThisCall)
+		CS16_StartupTrace("CL_CreateMove: enter");
 
 	float spd;
 	vec3_t viewangles;
@@ -720,7 +730,7 @@ void CL_DLLEXPORT CL_CreateMove ( float frametime, struct usercmd_s *cmd, int ac
 	cmd->buttons = CL_ButtonBits( 1 );
 
 	// If they're in a modal dialog, ignore the attack button.
-	if(GetClientVoice()->IsInSquelchMode())
+	if(GetClientVoiceMgr()->IsInSquelchMode())
 		cmd->buttons &= ~IN_ATTACK;
 
 	// Using joystick?
@@ -748,18 +758,12 @@ void CL_DLLEXPORT CL_CreateMove ( float frametime, struct usercmd_s *cmd, int ac
 	{
 		VectorCopy( oldangles, cmd->viewangles );
 	}
-}
 
-/*
-============
-CL_IsDead
-
-Returns 1 if health is <= 0
-============
-*/
-int	CL_IsDead( void )
-{
-	return ( gHUD.m_Health.m_iHealth <= 0 ) ? 1 : 0;
+	if (traceThisCall)
+	{
+		CS16_StartupTrace("CL_CreateMove: complete");
+		tracedFirstActiveCreateMove = true;
+	}
 }
 
 /*
@@ -1015,6 +1019,8 @@ void CL_DLLEXPORT HUD_Shutdown( void )
 {
 //	RecClShutdown();
 
+	CS16VGUI_Shutdown();
+	gHUD.Shutdown();
 	ShutdownInput();
 
 #if defined( _TFC )

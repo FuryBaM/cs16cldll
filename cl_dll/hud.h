@@ -627,6 +627,8 @@ class CHudTextMessage: public CHudBase
 {
 public:
 	int Init( void );
+	int Draw( float flTime );
+	void Reset( void );
 	static char *LocaliseTextString( const char *msg, char *dst_buffer, int buffer_size );
 	static char *BufferedLocaliseTextString( const char *msg );
 	static char *LookupString( char *msg_name, int *msg_dest = NULL );

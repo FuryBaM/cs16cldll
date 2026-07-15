@@ -34,6 +34,7 @@
 #include "camera.h"
 
 #include "draw_util.h"
+#include "cs_vgui.h"
 
 #if _WIN32
 #define strncasecmp _strnicmp
@@ -41,7 +42,17 @@
 
 ref_params_t s_last;
 Vector s_punchSm(0, 0, 0);
-cvar_t* cl_recoil_crosshair_scale;
+static char g_recoilCrosshairScaleName[] = "cl_recoil_crosshair_scale";
+static char g_recoilCrosshairScaleValue[] = "1";
+static cvar_t g_recoilCrosshairScaleFallback =
+{
+	g_recoilCrosshairScaleName,
+	g_recoilCrosshairScaleValue,
+	0,
+	1.0f,
+	NULL
+};
+cvar_t* cl_recoil_crosshair_scale = &g_recoilCrosshairScaleFallback;
 
 cvar_t *cl_fog_r;
 cvar_t *cl_fog_g;
@@ -261,8 +272,8 @@ void CHud :: Init( void )
 {
 	SetGameType(); // call it first, so we will know gamedir at very early stage
 
-	HOOK_COMMAND( "special", InputCommandSpecial, );
-	HOOK_COMMAND( "gunsmoke", GunSmoke, );
+	HOOK_COMMAND( "special", InputCommandSpecial );
+	HOOK_COMMAND( "gunsmoke", GunSmoke );
 	
 	HOOK_MESSAGE( Logo );
 	HOOK_MESSAGE( ResetHUD );
@@ -283,7 +294,11 @@ void CHud :: Init( void )
 	HOOK_MESSAGE( Fog );
 
 
-	CVAR_CREATE( "_vgui_menus", "1", FCVAR_ARCHIVE | FCVAR_USERINFO );
+	// Start conservatively and advertise VGUI only after its Microsoft-ABI
+	// viewport has attached to GoldSrc's root panel.
+	CVAR_CREATE( "cs_vgui_enable", "1", FCVAR_ARCHIVE );
+	CVAR_CREATE( "_vgui_menus", "0", FCVAR_ARCHIVE | FCVAR_USERINFO );
+	gEngfuncs.Cvar_SetValue( "_vgui_menus", CS16VGUI_IsAvailable() ? 1.0f : 0.0f );
 	CVAR_CREATE( "_cl_autowepswitch", "1", FCVAR_ARCHIVE | FCVAR_USERINFO );
 	CVAR_CREATE( "_ah", "0", FCVAR_ARCHIVE | FCVAR_USERINFO );
 
@@ -311,11 +326,20 @@ void CHud :: Init( void )
 	cl_gunsmoke  = CVAR_CREATE( "cl_gunsmoke", "0", FCVAR_ARCHIVE );
 	cl_weapon_sparks = CVAR_CREATE( "cl_weapon_sparks", "1", FCVAR_ARCHIVE );
 	cl_weapon_wallpuff = CVAR_CREATE( "cl_weapon_wallpuff", "1", FCVAR_ARCHIVE );
+	if( cvar_t* recoilScale = CVAR_CREATE( "cl_recoil_crosshair_scale", "1", FCVAR_ARCHIVE ) )
+		cl_recoil_crosshair_scale = recoilScale;
 	zoom_sens_ratio = CVAR_CREATE( "zoom_sensitivity_ratio", "1.2", 0 );
 	m_pCvarStealMouse = CVAR_CREATE("hud_capturemouse", "1", FCVAR_ARCHIVE);
 
 	cl_charset = gEngfuncs.pfnGetCvarPointer( "cl_charset" );
 	con_charset = gEngfuncs.pfnGetCvarPointer( "con_charset" );
+	// These cvars are supplied by Xash but are absent in ordinary Steam
+	// GoldSrc. Keep the optional charset feature without dereferencing null on
+	// the first CHud::Redraw.
+	if( !cl_charset )
+		cl_charset = CVAR_CREATE( "cl_charset", "", FCVAR_ARCHIVE );
+	if( !con_charset )
+		con_charset = CVAR_CREATE( "con_charset", "", FCVAR_ARCHIVE );
 
 	m_pShowHealth = CVAR_CREATE( "scoreboard_showhealth", "1", FCVAR_ARCHIVE );
 	m_pShowMoney = CVAR_CREATE( "scoreboard_showmoney", "1", FCVAR_ARCHIVE );
@@ -388,7 +412,7 @@ void CHud :: Init( void )
 	m_Menu.Init();
 	m_Scoreboard.Init();
 
-	GetClientVoiceMgr()->Init( &g_VoiceStatusHelper, nullptr);
+	GetClientVoiceMgr()->Init( &g_VoiceStatusHelper );
 
 	InitRain();
 
@@ -507,7 +531,7 @@ void CHud :: VidInit( void )
 
 	if (m_HUD_number_0 == -1) {
 		gEngfuncs.pfnConsolePrint("CHud::VidInit: number_0 not found in hud.txt\n");
-		return; // или безопасный фолбэк
+		return; // РёР»Рё Р±РµР·РѕРїР°СЃРЅС‹Р№ С„РѕР»Р±СЌРє
 	}
 
 	m_iFontWidth  = GetSpriteRect(m_HUD_number_0).Width();

@@ -28,8 +28,34 @@
 #include "parsemsg.h"
 #include "ctype.h"
 #include "draw_util.h"
+#include "cs_localize.h"
 
 DECLARE_MESSAGE(m_TextMessage, TextMsg);
+
+#define MAX_TEXTMSG_STRING 512
+
+namespace
+{
+char g_szCenterMessage[MAX_TEXTMSG_STRING];
+float g_flCenterMessageUntil = 0.0f;
+bool g_bCenterTestCommandRegistered = false;
+
+void SetCenterMessage(const char* text)
+{
+	if (!text)
+		text = "";
+
+	strncpy(g_szCenterMessage, text, sizeof(g_szCenterMessage));
+	g_szCenterMessage[sizeof(g_szCenterMessage) - 1] = '\0';
+	g_flCenterMessageUntil = gHUD.m_flTime + 3.0f;
+	gHUD.m_TextMessage.m_iFlags |= HUD_DRAW;
+}
+
+void CS16_TestCenterMessage_f()
+{
+	SetCenterMessage(CS16_Localize("#Bomb_Planted"));
+}
+}
 
 int CHudTextMessage::Init(void)
 {
@@ -37,6 +63,59 @@ int CHudTextMessage::Init(void)
 
 	gHUD.AddHudElem(this);
 	m_iFlags = 0;
+	g_szCenterMessage[0] = '\0';
+	g_flCenterMessageUntil = 0.0f;
+
+	if (!g_bCenterTestCommandRegistered && gEngfuncs.pfnAddCommand)
+	{
+		gEngfuncs.pfnAddCommand("cs_test_centertext", CS16_TestCenterMessage_f);
+		g_bCenterTestCommandRegistered = true;
+	}
+
+	return 1;
+}
+
+void CHudTextMessage::Reset(void)
+{
+	g_szCenterMessage[0] = '\0';
+	g_flCenterMessageUntil = 0.0f;
+	m_iFlags &= ~HUD_DRAW;
+}
+
+int CHudTextMessage::Draw(float flTime)
+{
+	if (!g_szCenterMessage[0] || flTime >= g_flCenterMessageUntil)
+	{
+		Reset();
+		return 1;
+	}
+
+	char text[MAX_TEXTMSG_STRING];
+	strncpy(text, g_szCenterMessage, sizeof(text));
+	text[sizeof(text) - 1] = '\0';
+
+	int lineCount = 1;
+	for (const char* p = text; *p; ++p)
+	{
+		if (*p == '\n')
+			++lineCount;
+	}
+
+	const int lineHeight = max(12, gHUD.GetCharHeight());
+	int y = ScreenHeight / 3 - ((lineCount - 1) * lineHeight) / 2;
+	char* line = text;
+	while (line)
+	{
+		char* next = strchr(line, '\n');
+		if (next)
+			*next++ = '\0';
+
+		const int width = DrawUtils::ConsoleStringLen(line);
+		DrawUtils::SetConsoleTextColor(1.0f, 1.0f, 1.0f);
+		DrawUtils::DrawConsoleString((ScreenWidth - width) / 2, y, line);
+		y += lineHeight;
+		line = next;
+	}
 
 	return 1;
 }
@@ -60,7 +139,7 @@ char* CHudTextMessage::LocaliseTextString(const char* msg, char* dst_buffer, int
 	{
 		if (*src == '#')
 		{
-			const char* word_start = ++src;
+			++src;
 			char word_buf[256]; int wi = 0;
 			while (*src&& wi < (int)sizeof(word_buf) - 1)
 			{
@@ -72,23 +151,13 @@ char* CHudTextMessage::LocaliseTextString(const char* msg, char* dst_buffer, int
 
 			if (wi == 0) { putc('#'); continue; }
 
-			client_textmessage_t* clmsg = TextMessageGet(word_buf);
-			if (!clmsg || !clmsg->pMessage)
-			{
-				putc('#');
-				for (const char* p = word_buf; *p && buffer_size > 1; ++p) putc(*p);
-				continue;
-			}
-
-			if (clmsg->pMessage[0] == '#')
-			{
-				const char* repl = BufferedLocaliseTextString(clmsg->pMessage);
-				for (const char* p = repl; *p && buffer_size > 1; ++p) putc(*p);
-			}
-			else
-			{
-				for (const char* p = clmsg->pMessage; *p && buffer_size > 1; ++p) putc(*p);
-			}
+			char reference[258];
+			reference[0] = '#';
+			strncpy(reference + 1, word_buf, sizeof(reference) - 2);
+			reference[sizeof(reference) - 1] = '\0';
+			const char* replacement = CS16_Localize(reference);
+			for (const char* p = replacement; *p && buffer_size > 1; ++p)
+				putc(*p);
 		}
 		else
 		{
@@ -116,24 +185,21 @@ char* CHudTextMessage::LookupString(char* msg, int* msg_dest)
 	if (msg[0] == '#')
 	{
 		client_textmessage_t* clmsg = TextMessageGet(msg + 1);
-		if (!clmsg || !clmsg->pMessage)
-			return msg;
-
-		if (msg_dest && clmsg->effect < 0)
+		if (clmsg && msg_dest && clmsg->effect < 0)
 			*msg_dest = -clmsg->effect;
 
-		if (clmsg->pMessage[0] == '#')
-			return (char*)gHUD.m_TextMessage.BufferedLocaliseTextString(clmsg->pMessage + 1);
-
-		return (char*)clmsg->pMessage;
+		return (char*)CS16_Localize(msg);
 	}
 
-	// обычная строка
+	// РѕР±С‹С‡РЅР°СЏ СЃС‚СЂРѕРєР°
 	return msg;
 }
 
 void StripEndNewlineFromString(char* str)
 {
+	if (!str || !str[0])
+		return;
+
 	int s = strlen(str) - 1;
 	if (str[s] == '\n' || str[s] == '\r')
 		str[s] = 0;
@@ -161,7 +227,6 @@ char* ConvertCRtoNL(char* str)
 //   string: message parameter 4
 // any string that starts with the character '#' is a message name, and is used to look up the real message in titles.txt
 // the next (optional) one to four strings are parameters for that string (which can also be message names if they begin with '#')
-#define MAX_TEXTMSG_STRING 512
 int CHudTextMessage::MsgFunc_TextMsg(const char* pszName, int iSize, void* pbuf)
 {
 	BufferReader reader(pszName, pbuf, iSize);
@@ -177,7 +242,8 @@ int CHudTextMessage::MsgFunc_TextMsg(const char* pszName, int iSize, void* pbuf)
 	// keep reading strings and using C format strings for substituting the strings into the localised text string
 	for (int i = 1; i <= 4; i++)
 	{
-		char* str = LookupString(reader.ReadString());
+		char* raw = reader.ReadString();
+		const char* str = i == 2 ? raw : CS16_Localize(raw);
 		strncpy(szBuf[i], str, MAX_TEXTMSG_STRING);
 		szBuf[i][MAX_TEXTMSG_STRING - 1] = 0;
 
@@ -186,62 +252,39 @@ int CHudTextMessage::MsgFunc_TextMsg(const char* pszName, int iSize, void* pbuf)
 	}
 
 	char* psz = szBuf[5];
-
-	// Remove numbers after %s.
-	// VALVEWHY?
-	if (strlen(msg_text) >= 3)
-	{
-		for (size_t i = 0; i < strlen(msg_text) - 2; i++)
-		{
-			if (msg_text[i] == '%' && msg_text[i + 1] == 's' && isdigit(msg_text[i + 2]))
-			{
-				char* first = &msg_text[i + 2];
-				char* second = &msg_text[i + 3];
-
-				size_t len = strlen(second);
-
-				memmove(first, second, strlen(second));
-				first[len] = '\0'; // one character has been removed and string moved, set null terminator
-			}
-		}
-	}
+	const char* arguments[4] = { szBuf[1], szBuf[2], szBuf[3], szBuf[4] };
 
 
 	switch (msg_dest)
 	{
 	case HUD_PRINTCENTER:
 	{
-		snprintf(psz, MAX_TEXTMSG_STRING, msg_text, szBuf[1], szBuf[2], szBuf[3], szBuf[4]);
+		CS16_LocalizeFormat(psz, MAX_TEXTMSG_STRING, msg_text, arguments, 4);
 
 		ConvertCRtoNL(psz);
-
-		int len = DrawUtils::ConsoleStringLen(psz);
-
-		DrawUtils::DrawConsoleString((ScreenWidth - len) / 2, ScreenHeight / 3, psz);
-
-		CenterPrint(psz);
+		SetCenterMessage(psz);
 		break;
 	}
 	case HUD_PRINTNOTIFY:
 		psz[0] = 1;  // mark this message to go into the notify buffer
-		snprintf(psz + 1, MAX_TEXTMSG_STRING - 1, msg_text, szBuf[1], szBuf[2], szBuf[3], szBuf[4]);
+		CS16_LocalizeFormat(psz + 1, MAX_TEXTMSG_STRING - 1, msg_text, arguments, 4);
 		ConsolePrint(ConvertCRtoNL(psz));
 		break;
 
 	case HUD_PRINTTALK:
 		psz[0] = 2; // mark, so SayTextPrint will color it
-		snprintf(psz + 1, MAX_TEXTMSG_STRING - 1, msg_text, szBuf[1], szBuf[2], szBuf[3], szBuf[4]);
+		CS16_LocalizeFormat(psz + 1, MAX_TEXTMSG_STRING - 1, msg_text, arguments, 4);
 		gHUD.m_SayText.SayTextPrint(ConvertCRtoNL(psz), 128);
 		break;
 
 	case HUD_PRINTCONSOLE:
-		snprintf(psz, MAX_TEXTMSG_STRING, msg_text, szBuf[1], szBuf[2], szBuf[3], szBuf[4]);
+		CS16_LocalizeFormat(psz, MAX_TEXTMSG_STRING, msg_text, arguments, 4);
 		ConsolePrint(ConvertCRtoNL(psz));
 		break;
 
 	case HUD_PRINTRADIO:
 		psz[0] = 2;
-		snprintf(psz + 1, MAX_TEXTMSG_STRING - 1, szBuf[1], szBuf[2], szBuf[3], szBuf[4]);
+		CS16_LocalizeFormat(psz + 1, MAX_TEXTMSG_STRING - 1, szBuf[1], &arguments[1], 3);
 
 		clientIdx = atoi(szBuf[0]);
 		gHUD.m_SayText.SayTextPrint(ConvertCRtoNL(psz), 128, clientIdx);

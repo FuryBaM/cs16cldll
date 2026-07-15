@@ -730,8 +730,8 @@ TEMPENTITY *g_DeadPlayerModels[64];
 void CreateCorpse(Vector vOrigin, Vector vAngles, const char *pModel, float flAnimTime, int iSequence, int iBody)
 {
 	int modelIdx = gEngfuncs.pEventAPI->EV_FindModelIndex(pModel);
-	Vector null(0, 0, 0);
-	TEMPENTITY *model = gEngfuncs.pEfxAPI->R_TempModel( vOrigin, null, vAngles, 100.0f, modelIdx, 0 );
+	Vector zeroVelocity(0, 0, 0);
+	TEMPENTITY *model = gEngfuncs.pEfxAPI->R_TempModel( vOrigin, zeroVelocity, vAngles, 100.0f, modelIdx, 0 );
 
 	if( model )
 	{

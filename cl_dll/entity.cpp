@@ -1,4 +1,4 @@
-//========= Copyright © 1996-2002, Valve LLC, All rights reserved. ============
+//========= Copyright Â© 1996-2002, Valve LLC, All rights reserved. ============
 //
 // Purpose: 
 //
@@ -38,6 +38,16 @@ HUD_AddEntity
 */
 int CL_DLLEXPORT HUD_AddEntity(int type, struct cl_entity_s* ent, const char* modelname)
 {
+	static bool tracedFirstAddEntity = false;
+	const bool traceThisCall = CS16_RuntimeTraceEnabled();
+	if (!tracedFirstAddEntity)
+	{
+		CS16_StartupTrace("HUD_AddEntity: first call");
+		tracedFirstAddEntity = true;
+	}
+	if (traceThisCall)
+		CS16_StartupTrace("HUD_AddEntity: enter");
+
 	switch (type)
 	{
 	case ET_NORMAL:
@@ -65,10 +75,16 @@ int CL_DLLEXPORT HUD_AddEntity(int type, struct cl_entity_s* ent, const char* mo
 
 		if ((g_iUser1 == OBS_IN_EYE || gHUD.m_Spectator.m_pip->value == INSET_IN_EYE) &&
 			ent->index == g_iUser2)
+		{
+			if (traceThisCall)
+				CS16_StartupTrace("HUD_AddEntity: filtered");
 			return 0;	// don't draw the player we are following in eye
+		}
 
 	}
 
+	if (traceThisCall)
+		CS16_StartupTrace("HUD_AddEntity: complete");
 	return 1;
 }
 
@@ -83,6 +99,11 @@ structure, we need to copy them into the state structure at this point.
 */
 void CL_DLLEXPORT HUD_TxferLocalOverrides(struct entity_state_s* state, const struct clientdata_s* client)
 {
+	static bool tracedFirstLocalOverrides = false;
+	const bool traceThisCall = !tracedFirstLocalOverrides || CS16_RuntimeTraceEnabled();
+	if (traceThisCall)
+		CS16_StartupTrace("HUD_TxferLocalOverrides: enter");
+
 	VectorCopy(client->origin, state->origin);
 	
 	// Spectator
@@ -94,6 +115,12 @@ void CL_DLLEXPORT HUD_TxferLocalOverrides(struct entity_state_s* state, const st
 
 	// Fire prevention
 	state->iuser4 = client->iuser4;
+
+	if (traceThisCall)
+	{
+		CS16_StartupTrace("HUD_TxferLocalOverrides: complete");
+		tracedFirstLocalOverrides = true;
+	}
 }
 
 /*
@@ -106,6 +133,11 @@ playerstate structure
 */
 void CL_DLLEXPORT HUD_ProcessPlayerState(struct entity_state_s* dst, const struct entity_state_s* src)
 {
+	static bool tracedFirstPlayerState = false;
+	const bool traceThisCall = !tracedFirstPlayerState || CS16_RuntimeTraceEnabled();
+	if (traceThisCall)
+		CS16_StartupTrace("HUD_ProcessPlayerState: enter");
+
 	// Copy in network data
 	VectorCopy(src->origin, dst->origin);
 	VectorCopy(src->angles, dst->angles);
@@ -149,7 +181,7 @@ void CL_DLLEXPORT HUD_ProcessPlayerState(struct entity_state_s* dst, const struc
 
 	// Save off some data so other areas of the Client DLL can get to it
 	cl_entity_t* player = gEngfuncs.GetLocalPlayer();	// Get the local player's index
-	if (dst->number == player->index)
+	if (player && dst->number == player->index)
 	{
 		g_iTeamNumber = g_PlayerExtraInfo[dst->number].teamnumber;
 
@@ -161,6 +193,12 @@ void CL_DLLEXPORT HUD_ProcessPlayerState(struct entity_state_s* dst, const struc
 	if (src->number > 0 && src->number < MAX_PLAYERS)
 	{
 		iOnTrain[src->number] = src->iuser4;
+	}
+
+	if (traceThisCall)
+	{
+		CS16_StartupTrace("HUD_ProcessPlayerState: complete");
+		tracedFirstPlayerState = true;
 	}
 }
 
@@ -176,6 +214,11 @@ Because we can predict an arbitrary number of frames before the server responds 
 */
 void CL_DLLEXPORT HUD_TxferPredictionData(struct entity_state_s* ps, const struct entity_state_s* pps, struct clientdata_s* pcd, const struct clientdata_s* ppcd, struct weapon_data_s* wd, const struct weapon_data_s* pwd)
 {
+	static bool tracedFirstPredictionTransfer = false;
+	const bool traceThisCall = !tracedFirstPredictionTransfer || CS16_RuntimeTraceEnabled();
+	if (traceThisCall)
+		CS16_StartupTrace("HUD_TxferPredictionData: enter");
+
 	ps->oldbuttons = pps->oldbuttons;
 	ps->flFallVelocity = pps->flFallVelocity;
 	ps->iStepLeft = pps->iStepLeft;
@@ -215,6 +258,12 @@ void CL_DLLEXPORT HUD_TxferPredictionData(struct entity_state_s* ps, const struc
 	pcd->vuser4 = ppcd->vuser4;
 
 	memcpy(wd, pwd, sizeof(weapon_data_t) * 32);
+
+	if (traceThisCall)
+	{
+		CS16_StartupTrace("HUD_TxferPredictionData: complete");
+		tracedFirstPredictionTransfer = true;
+	}
 }
 
 /*
@@ -226,9 +275,20 @@ Gives us a chance to add additional entities to the render this frame
 */
 void CL_DLLEXPORT HUD_CreateEntities(void)
 {
+	static bool tracedFirstCreateEntities = false;
+	const bool traceThisCall = !tracedFirstCreateEntities || CS16_RuntimeTraceEnabled();
+	if (traceThisCall)
+		CS16_StartupTrace("HUD_CreateEntities: enter");
+
 	// Add in any game specific objects
 
 	GetClientVoiceMgr()->CreateEntities();
+
+	if (traceThisCall)
+	{
+		CS16_StartupTrace("HUD_CreateEntities: complete");
+		tracedFirstCreateEntities = true;
+	}
 }
 
 /*
@@ -339,6 +399,11 @@ fired during this frame, handle the event by it's tag ( e.g., muzzleflash, sound
 */
 void CL_DLLEXPORT HUD_StudioEvent(const struct mstudioevent_s* event, const struct cl_entity_s* entity)
 {
+	static bool tracedFirstStudioEvent = false;
+	const bool traceThisCall = !tracedFirstStudioEvent || CS16_RuntimeTraceEnabled();
+	if (traceThisCall)
+		CS16_StartupTrace("HUD_StudioEvent: enter");
+
 	// #define CL_MuzzleFlash( x, y, z ) gEngfuncs.pEfxAPI->R_MuzzleFlash( y, z )
 	switch (event->event)
 	{
@@ -376,6 +441,12 @@ void CL_DLLEXPORT HUD_StudioEvent(const struct mstudioevent_s* event, const stru
 	default:
 		break;
 	}
+
+	if (traceThisCall)
+	{
+		CS16_StartupTrace("HUD_StudioEvent: complete");
+		tracedFirstStudioEvent = true;
+	}
 }
 
 /*
@@ -394,6 +465,10 @@ void CL_DLLEXPORT HUD_TempEntUpdate(
 	int		(*Callback_AddVisibleEntity)(cl_entity_t* pEntity),
 	void	(*Callback_TempEntPlaySound)(TEMPENTITY* pTemp, float damp))
 {
+	const bool traceThisCall = CS16_RuntimeTraceEnabled();
+	if (traceThisCall)
+		CS16_StartupTrace("HUD_TempEntUpdate: enter");
+
 	static int gTempEntFrame = 0;
 	int			i;
 	TEMPENTITY* pTemp, * pnext, * pprev;
@@ -406,9 +481,13 @@ void CL_DLLEXPORT HUD_TempEntUpdate(
 		g_pParticleMan->SetVariables( cl_gravity, vAngles );
 */
 
-// Nothing to simulate
+	// Nothing to simulate
 	if (!*ppTempEntActive)
+	{
+		if (traceThisCall)
+			CS16_StartupTrace("HUD_TempEntUpdate: complete (empty)");
 		return;
+	}
 
 	// in order to have tents collide with players, we have to run the player prediction code so
 	// that the client has the player list. We run this code once when we detect any COLLIDEALL 
@@ -777,6 +856,8 @@ void CL_DLLEXPORT HUD_TempEntUpdate(
 finish:
 	// Restore state info
 	gEngfuncs.pEventAPI->EV_PopPMStates();
+	if (traceThisCall)
+		CS16_StartupTrace("HUD_TempEntUpdate: complete");
 }
 
 /*
@@ -794,4 +875,3 @@ cl_entity_t CL_DLLEXPORT* HUD_GetUserEntity(int index)
 {
 	return NULL;
 }
-

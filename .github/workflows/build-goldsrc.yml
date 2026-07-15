@@ -1,0 +1,36 @@
+name: Build Steam GoldSrc client.dll
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  win32:
+    name: Windows x86 / Release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build
+        shell: pwsh
+        run: msbuild .\cs16cldll.sln /m /p:Configuration=Release /p:Platform=x86 /p:PreferredToolArchitecture=x64
+
+      - name: Verify GoldSrc ABI
+        shell: pwsh
+        run: .\scripts\verify-client.ps1 -Path .\build\Release\client.dll
+
+      - name: Upload client.dll
+        uses: actions/upload-artifact@v4
+        with:
+          name: cs16-steam-goldsrc-client-win32
+          path: build/Release/client.dll
+          if-no-files-found: error

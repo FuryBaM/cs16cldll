@@ -52,6 +52,15 @@
 
 CGameStudioModelRenderer g_StudioRenderer;
 
+// The earlier GoldSrc bring-up temporarily selected the base Half-Life
+// renderer. The crash seen after class selection was later traced to the
+// recoil crosshair cvar, not studio rendering. Counter-Strike models require
+// this renderer's 9-way blend and CS gait logic for correct poses.
+static CStudioModelRenderer& ActiveStudioRenderer(void)
+{
+	return g_StudioRenderer;
+}
+
 int g_rseq;
 int g_gaitseq;
 vec3_t g_clorg;
@@ -119,13 +128,18 @@ void CGameStudioModelRenderer::StudioSetupBones(void)
 	static float pos4[MAXSTUDIOBONES][3];
 	static vec4_t q4[MAXSTUDIOBONES];
 
+	if (!m_pCurrentEntity || !m_pStudioHeader || !m_pRenderModel ||
+		m_pStudioHeader->numseq <= 0)
+		return;
+
 	if (!m_pCurrentEntity->player)
 	{
 		CStudioModelRenderer::StudioSetupBones();
 		return;
 	}
 
-	if (m_pCurrentEntity->curstate.sequence >= m_pStudioHeader->numseq)
+	if (m_pCurrentEntity->curstate.sequence < 0 ||
+		m_pCurrentEntity->curstate.sequence >= m_pStudioHeader->numseq)
 		m_pCurrentEntity->curstate.sequence = 0;
 
 	pseqdesc = (mstudioseqdesc_t*)((byte*)m_pStudioHeader + m_pStudioHeader->seqindex) + m_pCurrentEntity->curstate.sequence;
@@ -322,7 +336,11 @@ void CGameStudioModelRenderer::StudioSetupBones(void)
 
 	pbones = (mstudiobone_t*)((byte*)m_pStudioHeader + m_pStudioHeader->boneindex);
 
-	if (m_pPlayerInfo && (m_pCurrentEntity->curstate.sequence < ANIM_FIRST_DEATH_SEQUENCE || m_pCurrentEntity->curstate.sequence > ANIM_LAST_DEATH_SEQUENCE) && (m_pCurrentEntity->curstate.sequence < ANIM_FIRST_EMOTION_SEQUENCE || m_pCurrentEntity->curstate.sequence > ANIM_LAST_EMOTION_SEQUENCE) && m_pCurrentEntity->curstate.sequence != ANIM_SWIM_1 && m_pCurrentEntity->curstate.sequence != ANIM_SWIM_2)
+	if (m_pPlayerInfo && m_pPlayerInfo->gaitsequence > 0 &&
+		(m_pCurrentEntity->curstate.sequence < ANIM_FIRST_DEATH_SEQUENCE || m_pCurrentEntity->curstate.sequence > ANIM_LAST_DEATH_SEQUENCE) &&
+		(m_pCurrentEntity->curstate.sequence < ANIM_FIRST_EMOTION_SEQUENCE || m_pCurrentEntity->curstate.sequence > ANIM_LAST_EMOTION_SEQUENCE) &&
+		m_pCurrentEntity->curstate.sequence != ANIM_SWIM_1 &&
+		m_pCurrentEntity->curstate.sequence != ANIM_SWIM_2)
 	{
 		int copy = 1;
 
@@ -338,7 +356,8 @@ void CGameStudioModelRenderer::StudioSetupBones(void)
 		{
 			if (!strcmp(pbones[i].name, "Bip01 Spine"))
 				copy = 0;
-			else if (!strcmp(pbones[pbones[i].parent].name, "Bip01 Pelvis"))
+			else if (pbones[i].parent >= 0 &&
+				!strcmp(pbones[pbones[i].parent].name, "Bip01 Pelvis"))
 				copy = 1;
 
 			if (copy)
@@ -781,7 +800,7 @@ int CGameStudioModelRenderer::StudioDrawPlayer(int flags, entity_state_t* pplaye
 	if (isLocalPlayer)
 		RestorePlayerState(pplayer);
 
-	if (m_pCvarShadows->value != 0.0f)
+	if (iret && m_pCvarShadows && m_pCvarShadows->value != 0.0f)
 	{
 		Vector chestpos;
 
@@ -812,6 +831,9 @@ bool WeaponHasAttachments(entity_state_t* pplayer)
 		return false;
 
 	pweaponmodel = IEngineStudio.GetModelByIndex(pplayer->weaponmodel);
+	if (!pweaponmodel)
+		return false;
+
 	modelheader = (studiohdr_t*)IEngineStudio.Mod_Extradata(pweaponmodel);
 
 	if (!modelheader)
@@ -823,6 +845,8 @@ bool WeaponHasAttachments(entity_state_t* pplayer)
 int CGameStudioModelRenderer::_StudioDrawPlayer(int flags, entity_state_t* pplayer)
 {
 	m_pCurrentEntity = IEngineStudio.GetCurrentEntity();
+	if (!m_pCurrentEntity || !pplayer)
+		return 0;
 
 	IEngineStudio.GetTimes(&m_nFrameCount, &m_clTime, &m_clOldTime);
 	IEngineStudio.GetViewInfo(m_vRenderOrigin, m_vUp, m_vRight, m_vNormal);
@@ -875,28 +899,32 @@ int CGameStudioModelRenderer::_StudioDrawPlayer(int flags, entity_state_t* pplay
 
 	m_pStudioHeader = (studiohdr_t*)IEngineStudio.Mod_Extradata(m_pRenderModel);
 
-	if (!m_pStudioHeader)
+	if (!m_pStudioHeader || m_pStudioHeader->numseq <= 0)
 		return 0;
 
 	IEngineStudio.StudioSetHeader(m_pStudioHeader);
 	IEngineStudio.SetRenderModel(m_pRenderModel);
 
-	if (m_pCurrentEntity->curstate.sequence >= m_pStudioHeader->numseq)
+	if (m_pCurrentEntity->curstate.sequence < 0 ||
+		m_pCurrentEntity->curstate.sequence >= m_pStudioHeader->numseq)
 		m_pCurrentEntity->curstate.sequence = 0;
 
-	if (pplayer->sequence >= m_pStudioHeader->numseq)
+	if (pplayer->sequence < 0 || pplayer->sequence >= m_pStudioHeader->numseq)
 		pplayer->sequence = 0;
 
-	if (m_pCurrentEntity->curstate.gaitsequence >= m_pStudioHeader->numseq)
+	if (m_pCurrentEntity->curstate.gaitsequence < 0 ||
+		m_pCurrentEntity->curstate.gaitsequence >= m_pStudioHeader->numseq)
 		m_pCurrentEntity->curstate.gaitsequence = 0;
 
-	if (pplayer->gaitsequence >= m_pStudioHeader->numseq)
+	if (pplayer->gaitsequence < 0 || pplayer->gaitsequence >= m_pStudioHeader->numseq)
 		pplayer->gaitsequence = 0;
 
 	if (pplayer->gaitsequence)
 	{
 		vec3_t orig_angles(m_pCurrentEntity->angles);
 		m_pPlayerInfo = IEngineStudio.PlayerInfo(m_nPlayerIndex);
+		if (!m_pPlayerInfo)
+			return CStudioModelRenderer::StudioDrawPlayer(flags, pplayer);
 
 		StudioProcessGait(pplayer);
 
@@ -918,6 +946,8 @@ int CGameStudioModelRenderer::_StudioDrawPlayer(int flags, entity_state_t* pplay
 		m_pCurrentEntity->latched.prevcontroller[3] = m_pCurrentEntity->curstate.controller[3];
 
 		m_pPlayerInfo = IEngineStudio.PlayerInfo(m_nPlayerIndex);
+		if (!m_pPlayerInfo)
+			return CStudioModelRenderer::StudioDrawPlayer(flags, pplayer);
 
 		CalculatePitchBlend(pplayer);
 		CalculateYawBlend(pplayer);
@@ -928,14 +958,18 @@ int CGameStudioModelRenderer::_StudioDrawPlayer(int flags, entity_state_t* pplay
 
 	if (flags & STUDIO_RENDER)
 	{
-		(*m_pModelsDrawn)++;
-		(*m_pStudioModelCount)++;
+		if (m_pModelsDrawn)
+			(*m_pModelsDrawn)++;
+		if (m_pStudioModelCount)
+			(*m_pStudioModelCount)++;
 
 		if (m_pStudioHeader->numbodyparts == 0)
 			return 1;
 	}
 
 	m_pPlayerInfo = IEngineStudio.PlayerInfo(m_nPlayerIndex);
+	if (!m_pPlayerInfo)
+		return CStudioModelRenderer::StudioDrawPlayer(flags, pplayer);
 
 	StudioSetupBones();
 	StudioSaveBones();
@@ -951,7 +985,8 @@ int CGameStudioModelRenderer::_StudioDrawPlayer(int flags, entity_state_t* pplay
 		if (m_pCurrentEntity->index > 0)
 		{
 			cl_entity_t* ent = gEngfuncs.GetEntityByIndex(m_pCurrentEntity->index);
-			memcpy(ent->attachment, m_pCurrentEntity->attachment, sizeof(vec3_t) * 4);
+			if (ent)
+				memcpy(ent->attachment, m_pCurrentEntity->attachment, sizeof(vec3_t) * 4);
 		}
 	}
 
@@ -967,6 +1002,8 @@ int CGameStudioModelRenderer::_StudioDrawPlayer(int flags, entity_state_t* pplay
 		IEngineStudio.StudioSetupLighting(&lighting);
 
 		m_pPlayerInfo = IEngineStudio.PlayerInfo(m_nPlayerIndex);
+		if (!m_pPlayerInfo)
+			return 0;
 		m_nTopColor = m_pPlayerInfo->topcolor;
 
 		if (m_nTopColor < 0)
@@ -994,30 +1031,33 @@ int CGameStudioModelRenderer::_StudioDrawPlayer(int flags, entity_state_t* pplay
 			cl_entity_t saveent = *m_pCurrentEntity;
 
 			model_t* pweaponmodel = IEngineStudio.GetModelByIndex(pplayer->weaponmodel);
+			studiohdr_t* weaponHeader = pweaponmodel
+				? (studiohdr_t*)IEngineStudio.Mod_Extradata(pweaponmodel)
+				: NULL;
+			if (weaponHeader)
+			{
+				m_pStudioHeader = weaponHeader;
+				IEngineStudio.StudioSetHeader(m_pStudioHeader);
+				StudioMergeBones(pweaponmodel);
+				IEngineStudio.StudioSetupLighting(&lighting);
+				StudioRenderModel(dir);
+				StudioCalcAttachments();
 
-			m_pStudioHeader = (studiohdr_t*)IEngineStudio.Mod_Extradata(pweaponmodel);
-			if (!m_pStudioHeader)
-				return 0;
+				if (m_pCurrentEntity->index > 0)
+				{
+					const int attachmentCount = min(4, m_pStudioHeader->numattachments);
+					memcpy(saveent.attachment, m_pCurrentEntity->attachment,
+						sizeof(vec3_t) * attachmentCount);
+				}
 
-			IEngineStudio.StudioSetHeader(m_pStudioHeader);
+				*m_pCurrentEntity = saveent;
+				m_pStudioHeader = saveheader;
+				IEngineStudio.StudioSetHeader(m_pStudioHeader);
+				IEngineStudio.SetRenderModel(m_pRenderModel);
 
-			StudioMergeBones(pweaponmodel);
-
-			IEngineStudio.StudioSetupLighting(&lighting);
-
-			StudioRenderModel(dir);
-
-			StudioCalcAttachments();
-
-			if (m_pCurrentEntity->index > 0)
-				memcpy(saveent.attachment, m_pCurrentEntity->attachment, sizeof(vec3_t) * m_pStudioHeader->numattachments);
-
-			*m_pCurrentEntity = saveent;
-			m_pStudioHeader = saveheader;
-			IEngineStudio.StudioSetHeader(m_pStudioHeader);
-
-			if (flags & STUDIO_EVENTS)
-				IEngineStudio.StudioClientEvents();
+				if (flags & STUDIO_EVENTS)
+					IEngineStudio.StudioClientEvents();
+			}
 		}
 	}
 
@@ -1083,25 +1123,32 @@ void CGameStudioModelRenderer::StudioFxTransform(cl_entity_t* ent, float transfo
 
 void R_StudioInit(void)
 {
-	g_StudioRenderer.Init();
+	ActiveStudioRenderer().Init();
 }
 
 int R_StudioDrawPlayer(int flags, entity_state_t* pplayer)
 {
+	static bool tracedFirstStudioPlayer = false;
+	const bool traceThisCall = !tracedFirstStudioPlayer || CS16_RuntimeTraceEnabled();
+	if (traceThisCall)
+		CS16_StartupTrace("R_StudioDrawPlayer: enter");
+
+	CStudioModelRenderer& renderer = ActiveStudioRenderer();
+
 #ifndef NDEBUG
-	if (g_StudioRenderer.m_pCvarDebug->value >= 8)
+	if (renderer.m_pCvarDebug && renderer.m_pCvarDebug->value >= 8)
 	{
 		cl_entity_t* pCurrentEntity = IEngineStudio.GetCurrentEntity();
 		int ret = 0;
 
 		if (pCurrentEntity)
 		{
-			cvar_t* drawEntites = g_StudioRenderer.m_pCvarDrawEntities;
-			g_StudioRenderer.m_pCvarDebug->value -= 8;
-			g_StudioRenderer.m_pCvarDrawEntities = g_StudioRenderer.m_pCvarDebug;
+			cvar_t* drawEntites = renderer.m_pCvarDrawEntities;
+			renderer.m_pCvarDebug->value -= 8;
+			renderer.m_pCvarDrawEntities = renderer.m_pCvarDebug;
 
 			// first draw interpolated
-			ret = g_StudioRenderer.StudioDrawPlayer(flags, pplayer);
+			ret = renderer.StudioDrawPlayer(flags, pplayer);
 
 			// then draw non-interpolated
 			/*{
@@ -1146,20 +1193,43 @@ int R_StudioDrawPlayer(int flags, entity_state_t* pplayer)
 			}*/
 
 
-			g_StudioRenderer.m_pCvarDrawEntities = drawEntites;
-			g_StudioRenderer.m_pCvarDebug->value += 8;
+			renderer.m_pCvarDrawEntities = drawEntites;
+			renderer.m_pCvarDebug->value += 8;
 		}
 
+		if (traceThisCall)
+		{
+			CS16_StartupTrace("R_StudioDrawPlayer: complete");
+			tracedFirstStudioPlayer = true;
+		}
 		return ret;
 	}
 	else
 #endif
-		return g_StudioRenderer.StudioDrawPlayer(flags, pplayer);
+	{
+		const int result = renderer.StudioDrawPlayer(flags, pplayer);
+		if (traceThisCall)
+		{
+			CS16_StartupTrace("R_StudioDrawPlayer: complete");
+			tracedFirstStudioPlayer = true;
+		}
+		return result;
+	}
 }
 
 int R_StudioDrawModel(int flags)
 {
-	return g_StudioRenderer.StudioDrawModel(flags);
+	static bool tracedFirstStudioModel = false;
+	const bool traceThisCall = !tracedFirstStudioModel || CS16_RuntimeTraceEnabled();
+	if (traceThisCall)
+		CS16_StartupTrace("R_StudioDrawModel: enter");
+	const int result = ActiveStudioRenderer().StudioDrawModel(flags);
+	if (traceThisCall)
+	{
+		CS16_StartupTrace("R_StudioDrawModel: complete");
+		tracedFirstStudioModel = true;
+	}
+	return result;
 }
 // The simple drawing interface we'll pass back to the engine
 r_studio_interface_t studio =
@@ -1177,8 +1247,12 @@ Export this function for the engine to use the studio renderer class to render o
 */
 int CL_DLLEXPORT HUD_GetStudioModelInterface(int version, struct r_studio_interface_s** ppinterface, struct engine_studio_api_s* pstudio)
 {
+	CS16_StartupTrace("HUD_GetStudioModelInterface: enter");
 	if (version != STUDIO_INTERFACE_VERSION)
+	{
+		CS16_StartupTrace("HUD_GetStudioModelInterface: incompatible version");
 		return 0;
+	}
 
 	// Point the engine to our callbacks
 	*ppinterface = &studio;
@@ -1190,6 +1264,6 @@ int CL_DLLEXPORT HUD_GetStudioModelInterface(int version, struct r_studio_interf
 	R_StudioInit();
 
 	// Success
+	CS16_StartupTrace("HUD_GetStudioModelInterface: complete");
 	return 1;
 }
-

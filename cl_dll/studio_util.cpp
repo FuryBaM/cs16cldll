@@ -1,4 +1,4 @@
-//========= Copyright © 1996-2002, Valve LLC, All rights reserved. ============
+//========= Copyright Â© 1996-2002, Valve LLC, All rights reserved. ============
 //
 // Purpose: 
 //
@@ -12,6 +12,7 @@
 #include "com_model.h"
 #include "studio_util.h"
 
+#if !defined(CLIENT_DLL)
 /*
 ====================
 AngleMatrix
@@ -90,6 +91,7 @@ void VectorTransform (const float *in1, float in2[3][4], float *out)
 	out[1] = DotProduct(in1, in2[1]) + in2[1][3];
 	out[2] = DotProduct(in1, in2[2]) + in2[2][3];
 }
+#endif
 
 /*
 ================

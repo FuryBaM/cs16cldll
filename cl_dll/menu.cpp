@@ -20,6 +20,7 @@
 #include "hud.h"
 #include "cl_util.h"
 #include "parsemsg.h"
+#include "cs_vgui.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -31,12 +32,18 @@ char g_szPrelocalisedMenuString[MAX_MENU_STRING];
 int KB_ConvertString(char* in, char** ppout);
 
 DECLARE_MESSAGE(m_Menu, ShowMenu);
+DECLARE_MESSAGE(m_Menu, VGUIMenu);
+DECLARE_MESSAGE(m_Menu, BuyClose);
+DECLARE_MESSAGE(m_Menu, AllowSpec);
 
 int CHudMenu::Init(void)
 {
 	gHUD.AddHudElem(this);
 
 	HOOK_MESSAGE(ShowMenu);
+	HOOK_MESSAGE(VGUIMenu);
+	HOOK_MESSAGE(BuyClose);
+	HOOK_MESSAGE(AllowSpec);
 
 	InitHUDData();
 
@@ -46,6 +53,7 @@ int CHudMenu::Init(void)
 void CHudMenu::InitHUDData(void)
 {
 	m_fMenuDisplayed = 0;
+	m_bAllowSpec = true;
 	m_bitsValidSlots = 0;
 	Reset();
 }
@@ -235,6 +243,8 @@ void CHudMenu::SelectMenuItem(int menu_item)
 // if this message is never received, then scores will simply be the combined totals of the players.
 int CHudMenu::MsgFunc_ShowMenu(const char* pszName, int iSize, void* pbuf)
 {
+	CS16VGUI_HideMenu();
+
 	char* temp = NULL;
 	BufferReader reader(pszName, pbuf, iSize);
 
@@ -284,5 +294,45 @@ int CHudMenu::MsgFunc_ShowMenu(const char* pszName, int iSize, void* pbuf)
 
 	m_fWaitingForMore = NeedMore;
 
+	return 1;
+}
+
+// Route supported stock CS menu IDs to the native VGUI1 viewport. If a menu is
+// not implemented yet, switch this session back to ShowMenu instead of leaving
+// the player stuck behind an invisible panel.
+int CHudMenu::MsgFunc_VGUIMenu(const char* pszName, int iSize, void* pbuf)
+{
+	BufferReader reader(pszName, pbuf, iSize);
+	const int menu = iSize > 0 ? reader.ReadByte() : -1;
+	if (iSize >= 3)
+		m_bitsValidSlots = reader.ReadShort();
+	if (CS16VGUI_ShowMenu(menu))
+	{
+		m_fMenuDisplayed = 0;
+		m_iFlags &= ~HUD_ACTIVE;
+		return 1;
+	}
+
+	CS16VGUI_DisableForSession();
+	gEngfuncs.Cvar_SetValue("_vgui_menus", 0.0f);
+	gEngfuncs.Con_Printf(
+		"[CS16 GoldSrc] Rejected VGUIMenu %d; text menus are now enabled. Reopen the menu.\n",
+		menu);
+
+	return 1;
+}
+
+int CHudMenu::MsgFunc_BuyClose(const char*, int, void*)
+{
+	CS16VGUI_HideMenu();
+	m_fMenuDisplayed = 0;
+	m_iFlags &= ~HUD_ACTIVE;
+	return 1;
+}
+
+int CHudMenu::MsgFunc_AllowSpec(const char* pszName, int iSize, void* pbuf)
+{
+	BufferReader reader(pszName, pbuf, iSize);
+	m_bAllowSpec = iSize > 0 ? reader.ReadByte() != 0 : true;
 	return 1;
 }

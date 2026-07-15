@@ -51,7 +51,16 @@ Non-transparent triangles-- add them here
 */
 void CL_DLLEXPORT HUD_DrawNormalTriangles( void )
 {
+	static bool tracedFirstNormalTriangles = false;
+	const bool traceThisCall = !tracedFirstNormalTriangles || CS16_RuntimeTraceEnabled();
+	if (traceThisCall)
+		CS16_StartupTrace("HUD_DrawNormalTriangles: enter");
 	gHUD.m_Spectator.DrawOverview();
+	if (traceThisCall)
+	{
+		CS16_StartupTrace("HUD_DrawNormalTriangles: complete");
+		tracedFirstNormalTriangles = true;
+	}
 }
 
 /*
@@ -64,6 +73,10 @@ Render any triangles with transparent rendermode needs here
 extern bool Rain_Initialized;
 void CL_DLLEXPORT HUD_DrawTransparentTriangles( void )
 {
+	static bool tracedFirstTransparentTriangles = false;
+	const bool traceThisCall = !tracedFirstTransparentTriangles || CS16_RuntimeTraceEnabled();
+	if (traceThisCall)
+		CS16_StartupTrace("HUD_DrawTransparentTriangles: enter");
 	RenderFog();
 
 	if( Rain_Initialized )
@@ -72,5 +85,10 @@ void CL_DLLEXPORT HUD_DrawTransparentTriangles( void )
 		ProcessRain();
 		DrawRain();
 		DrawFXObjects();
+	}
+	if (traceThisCall)
+	{
+		CS16_StartupTrace("HUD_DrawTransparentTriangles: complete");
+		tracedFirstTransparentTriangles = true;
 	}
 }

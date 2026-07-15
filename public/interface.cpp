@@ -117,7 +117,7 @@ static IBaseInterface *CreateInterfaceLocal( const char *pName, int *pReturnCode
 //static hlds_run wants to use this function 
 static void *Sys_GetProcAddress( const char *pModuleName, const char *pName )
 {
-	return GetProcAddress( GetModuleHandle(pModuleName), pName );
+	return reinterpret_cast<void *>(GetProcAddress(GetModuleHandle(pModuleName), pName));
 }
 
 //-----------------------------------------------------------------------------
@@ -129,7 +129,7 @@ static void *Sys_GetProcAddress( const char *pModuleName, const char *pName )
 void *Sys_GetProcAddress( void *pModuleHandle, const char *pName )
 {
 #if defined ( _WIN32 )
-	return GetProcAddress( (HINSTANCE)pModuleHandle, pName );
+	return reinterpret_cast<void *>(GetProcAddress((HINSTANCE)pModuleHandle, pName));
 #else
 	return GetProcAddress( pModuleHandle, pName );
 #endif
@@ -259,7 +259,7 @@ CreateInterfaceFn Sys_GetFactoryThis( void )
 CreateInterfaceFn Sys_GetFactory( const char *pModuleName )
 {
 #if defined ( _WIN32 )
-	return static_cast<CreateInterfaceFn>( Sys_GetProcAddress( pModuleName, CREATEINTERFACE_PROCNAME ) );
+	return reinterpret_cast<CreateInterfaceFn>(Sys_GetProcAddress(pModuleName, CREATEINTERFACE_PROCNAME));
 #else
 // Linux gives this error:
 //../public/interface.cpp: In function `IBaseInterface *(*Sys_GetFactory 
@@ -271,6 +271,5 @@ CreateInterfaceFn Sys_GetFactory( const char *pModuleName )
 	return (CreateInterfaceFn)( Sys_GetProcAddress( pModuleName, CREATEINTERFACE_PROCNAME ) );
 #endif
 }
-
 
 

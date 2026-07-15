@@ -520,7 +520,8 @@ int CHudRadar::MsgFunc_Location(const char *pszName, int iSize, void *pbuf)
 		strncpy( g_PlayerExtraInfo[player].location, location, sizeof( g_PlayerExtraInfo[player].location ) );
 		g_PlayerExtraInfo[player].location[31] = 0;
 
-		GetClientVoiceHud()->UpdateLocation( player, g_PlayerExtraInfo[player].location );
+		// The GoldSrc/VGUI1 voice manager used by this project has no location
+		// labels. The old call belonged to CS16Client's newer VGUI2 voice HUD.
 	}
 	return 0;
 }

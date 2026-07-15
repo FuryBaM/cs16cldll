@@ -1,6 +1,10 @@
 #ifndef EXPORTDEF_H
 #define EXPORTDEF_H
-#if defined _WIN32 || defined __CYGWIN__
+#if defined(CLIENT_DLL)
+	// Shared weapon prediction classes reuse server headers, but their entity
+	// callbacks must not leak into the client DLL export table.
+	#define EXPORT
+#elif defined _WIN32 || defined __CYGWIN__
 	#ifdef __GNUC__
 		#define EXPORT __attribute__ ((dllexport))
 	#else

@@ -41,13 +41,6 @@
     <ClCompile Include="..\dlls\wpn_shared\wpn_ump45.cpp" />
     <ClCompile Include="..\dlls\wpn_shared\wpn_usp.cpp" />
     <ClCompile Include="..\dlls\wpn_shared\wpn_xm1014.cpp" />
-    <ClCompile Include="..\game_shared\vgui_checkbutton2.cpp" />
-    <ClCompile Include="..\game_shared\vgui_grid.cpp" />
-    <ClCompile Include="..\game_shared\vgui_helpers.cpp" />
-    <ClCompile Include="..\game_shared\vgui_listbox.cpp" />
-    <ClCompile Include="..\game_shared\vgui_loadtga.cpp" />
-    <ClCompile Include="..\game_shared\vgui_scrollbar2.cpp" />
-    <ClCompile Include="..\game_shared\vgui_slider2.cpp" />
     <ClCompile Include="..\game_shared\voice_banmgr.cpp" />
     <ClCompile Include="..\pm_shared\pm_debug.cpp" />
     <ClCompile Include="..\pm_shared\pm_math.cpp" />
@@ -58,6 +51,9 @@
     <ClCompile Include="ammo_secondary.cpp" />
     <ClCompile Include="battery.cpp" />
     <ClCompile Include="cdll_int.cpp" />
+    <ClCompile Include="cs_localize.cpp" />
+    <ClCompile Include="cs_vgui_bridge.cpp" />
+    <ClCompile Include="cs_vgui_viewport.cpp" />
     <ClCompile Include="com_weapons.cpp" />
     <ClCompile Include="cs_wpn\cs_weapons.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</ExcludedFromBuild>
@@ -136,18 +132,6 @@
     <ClCompile Include="train.cpp" />
     <ClCompile Include="tri.cpp" />
     <ClCompile Include="util.cpp" />
-    <ClCompile Include="vgui_ClassMenu.cpp" />
-    <ClCompile Include="vgui_ConsolePanel.cpp" />
-    <ClCompile Include="vgui_ControlConfigPanel.cpp" />
-    <ClCompile Include="vgui_CustomObjects.cpp" />
-    <ClCompile Include="vgui_int.cpp" />
-    <ClCompile Include="vgui_MOTDWindow.cpp" />
-    <ClCompile Include="vgui_SchemeManager.cpp" />
-    <ClCompile Include="vgui_ScorePanel.cpp" />
-    <ClCompile Include="vgui_ServerBrowser.cpp" />
-    <ClCompile Include="vgui_SpectatorPanel.cpp" />
-    <ClCompile Include="vgui_TeamFortressViewport.cpp" />
-    <ClCompile Include="vgui_teammenu.cpp" />
     <ClCompile Include="view.cpp" />
     <ClCompile Include="voice_status.cpp" />
   </ItemGroup>
@@ -167,6 +151,8 @@
     <ClInclude Include="ammohistory.h" />
     <ClInclude Include="camera.h" />
     <ClInclude Include="cl_dll.h" />
+    <ClInclude Include="cs_vgui.h" />
+    <ClInclude Include="cs_localize.h" />
     <ClInclude Include="com_weapons.h" />
     <ClInclude Include="csprite.h" />
     <ClInclude Include="demo.h" />
@@ -237,17 +223,21 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <TargetName>client</TargetName>
+    <OutDir>$(SolutionDir)build\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)build\obj\$(Configuration)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <TargetName>client</TargetName>
     <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(SolutionDir)build\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)build\obj\$(Configuration)\</IntDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>
       </SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;CLIENT_DLL;CLIENT_WEAPONS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE;client_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;CLIENT_DLL;CLIENT_WEAPONS;HL_DLL;_CS16CLIENT_ENABLE_GSRC_SUPPORT;_CS16CLIENT_ENABLE_VGUI1;VGUI_USE_IMPORTS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE;client_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>Default</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
@@ -262,7 +252,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
-      <AdditionalDependencies>$(SolutionDir)utils\vgui\lib\win32_vc16\vgui.lib;wsock32.lib;$(SolutionDir)lib\public\sdl2.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>wsock32.lib;$(SolutionDir)lib\public\SDL2.lib;$(SolutionDir)utils\vgui\lib\win32_vc16\vgui.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -272,7 +262,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>
       </SDLCheck>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;CLIENT_DLL;CLIENT_WEAPONS;HL_DLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;CLIENT_DLL;CLIENT_WEAPONS;HL_DLL;_CS16CLIENT_ENABLE_GSRC_SUPPORT;_CS16CLIENT_ENABLE_VGUI1;VGUI_USE_IMPORTS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_DEPRECATE;client_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>Default</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
@@ -287,8 +277,8 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <EnableUAC>true</EnableUAC>
-      <AdditionalDependencies>$(SolutionDir)utils\vgui\lib\win32_vc16\vgui.lib;wsock32.lib;$(SolutionDir)lib\public\sdl2.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <EnableUAC>false</EnableUAC>
+      <AdditionalDependencies>wsock32.lib;$(SolutionDir)lib\public\SDL2.lib;$(SolutionDir)utils\vgui\lib\win32_vc16\vgui.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

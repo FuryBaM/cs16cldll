@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include "parsemsg.h"
 #include "draw_util.h"
+#include "cs_localize.h"
 
 DECLARE_MESSAGE(m_Message, HudText);
 DECLARE_MESSAGE(m_Message, GameTitle);
@@ -455,7 +456,7 @@ void CHudMessage::MessageAdd(const char* pName, float time)
 			{
 				if (tempMessage->pMessage[0] == '#')
 				{
-					message = AllocMessage(CHudTextMessage::BufferedLocaliseTextString(tempMessage->pMessage), tempMessage);
+					message = AllocMessage(CS16_Localize(tempMessage->pMessage), tempMessage);
 				}
 				else if (!strcmp(tempMessage->pName, "Custom")) // Hey, it's mine way of detecting allocated message
 				{
@@ -469,13 +470,7 @@ void CHudMessage::MessageAdd(const char* pName, float time)
 			else
 			{
 				if (pName[0] == '#')
-				{
-					client_textmessage_t* msg = TextMessageGet(pName + 1);
-					if (msg && msg->pMessage)
-						pName = msg->pMessage;   // локализованная строка из titles.txt
-					else
-						pName = pName + 1;       // если не нашли, убираем '#'
-				}
+					pName = CS16_Localize(pName);
 
 				// If we couldnt find it in the titles.txt, just create it
 				message = AllocMessage(pName);
@@ -656,7 +651,7 @@ client_textmessage_t* CHudMessage::AllocMessage(const char* text, client_textmes
 	if (text)
 	{
 		int len = strlen(text);
-		char* szCustomText = new char[len];
+		char* szCustomText = new char[len + 1];
 		strcpy(szCustomText, text);
 
 		ret->pName = "Custom";

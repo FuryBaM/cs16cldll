@@ -21,6 +21,9 @@
 #include "triangleapi.h"
 
 #include <string.h>
+#if defined(_CS16CLIENT_STARTUP_TRACE)
+#include <stdio.h>
+#endif
 
 #include "draw_util.h"
 
@@ -83,6 +86,9 @@ void CHud::Think(void)
 // returns 1 if they've changed, 0 otherwise
 int CHud::Redraw(float flTime, int intermission)
 {
+	static bool tracedFirstRedraw = false;
+	const bool traceThisRedraw = !tracedFirstRedraw || CS16_RuntimeTraceEnabled();
+
 	m_fOldTime = m_flTime;	// save time of previous redraw
 	m_flTime = flTime;
 	m_flTimeDelta = (double)m_flTime - m_fOldTime;
@@ -100,10 +106,17 @@ int CHud::Redraw(float flTime, int intermission)
 
 	m_iIntermission = intermission;
 
+	if (traceThisRedraw)
+		CS16_StartupTrace("CHud::Redraw: color enter");
 	UpdateDefaultHUDColor();
+	if (traceThisRedraw)
+		CS16_StartupTrace("CHud::Redraw: color complete");
 
 	if (m_pCvarDraw->value && (intermission || !(m_iHideHUDDisplay & HIDEHUD_ALL)))
 	{
+		int hudElementIndex = 0;
+		if (traceThisRedraw)
+			CS16_StartupTrace("CHud::Redraw: HUD list enter");
 		for (HUDLIST* pList = m_pHudList; pList; pList = pList->pNext)
 		{
 			if (pList->p->m_iFlags & HUD_DRAW)
@@ -111,9 +124,26 @@ int CHud::Redraw(float flTime, int intermission)
 				if (intermission && !(pList->p->m_iFlags & HUD_INTERMISSION))
 					continue; // skip no-intermission during intermission
 
+				if (traceThisRedraw)
+				{
+					char stage[64];
+					snprintf(stage, sizeof(stage), "CHud::Redraw: element %d enter", hudElementIndex);
+					CS16_StartupTrace(stage);
+				}
+
 				pList->p->Draw(flTime);
+
+				if (traceThisRedraw)
+				{
+					char stage[64];
+					snprintf(stage, sizeof(stage), "CHud::Redraw: element %d complete", hudElementIndex);
+					CS16_StartupTrace(stage);
+				}
 			}
+			hudElementIndex++;
 		}
+		if (traceThisRedraw)
+			CS16_StartupTrace("CHud::Redraw: HUD list complete");
 	}
 
 	// are we in demo mode? do we need to draw the logo in the top corner?
@@ -137,12 +167,19 @@ int CHud::Redraw(float flTime, int intermission)
 		SPR_DrawAdditive(i, x, y, NULL);
 	}
 
-	// update codepage parameters
-	if (!stricmp(con_charset->string, "cp1251"))
+	if (traceThisRedraw)
+		CS16_StartupTrace("CHud::Redraw: charset enter");
+
+	// Xash exposes cl_charset/con_charset itself; Steam GoldSrc does not. The
+	// pointers are normally backed by our compatibility cvars, but keep this
+	// path null-safe if a third-party engine rejects their creation.
+	const char* consoleCharset = con_charset && con_charset->string ? con_charset->string : "";
+	const char* clientCharset = cl_charset && cl_charset->string ? cl_charset->string : "";
+	if (!stricmp(consoleCharset, "cp1251"))
 	{
 		g_codepage = 1251;
 	}
-	else if (!stricmp(con_charset->string, "cp1252"))
+	else if (!stricmp(consoleCharset, "cp1252"))
 	{
 		g_codepage = 1252;
 	}
@@ -151,7 +188,12 @@ int CHud::Redraw(float flTime, int intermission)
 		g_codepage = 0;
 	}
 
-	g_accept_utf8 = !stricmp(cl_charset->string, "utf-8");
+	g_accept_utf8 = !stricmp(clientCharset, "utf-8");
+	if (traceThisRedraw)
+	{
+		CS16_StartupTrace("CHud::Redraw: charset complete");
+		tracedFirstRedraw = true;
+	}
 
 	return 1;
 }

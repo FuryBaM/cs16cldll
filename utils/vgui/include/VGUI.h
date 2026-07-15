@@ -1,4 +1,4 @@
-//========= Copyright © 1996-2002, Valve LLC, All rights reserved. ============
+//========= Copyright Â© 1996-2002, Valve LLC, All rights reserved. ============
 //
 // Purpose: 
 //
@@ -78,7 +78,11 @@
 //TODO: Change all method naming to starting with a capital letter.
 
 #ifdef _WIN32
-# define VGUIAPI __declspec( dllexport )
+# if defined(VGUI_USE_IMPORTS)
+#  define VGUIAPI __declspec( dllimport )
+# else
+#  define VGUIAPI __declspec( dllexport )
+# endif
 #else
 # define VGUIAPI  __attribute__ ((visibility("default")))
 #include <sys/types.h> // size_t define
@@ -105,4 +109,3 @@ VGUIAPI int   vgui_dprintf2(const char* format,...);
 }
 
 #endif
-

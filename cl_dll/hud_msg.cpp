@@ -60,8 +60,17 @@ int CHud::MsgFunc_ResetHUD(const char* pszName, int iSize, void* pbuf)
 	const char* szFullMapName = gEngfuncs.pfnGetLevelName();
 	if (szFullMapName && szFullMapName[0])
 	{
-		strncpy(szMapName, szFullMapName + 5, sizeof(szMapName));
-		szMapName[strlen(szMapName) - 4] = '\0';
+		// GoldSrc normally returns "maps/name.bsp", but malformed or custom
+		// engines must not make the client index before/after this buffer.
+		const char* mapStart = szFullMapName;
+		if (strncmp(mapStart, "maps/", 5) == 0 || strncmp(mapStart, "maps\\", 5) == 0)
+			mapStart += 5;
+		strncpy(szMapName, mapStart, sizeof(szMapName) - 1);
+		szMapName[sizeof(szMapName) - 1] = '\0';
+
+		const size_t mapLength = strlen(szMapName);
+		if (mapLength >= 4 && strcmp(szMapName + mapLength - 4, ".bsp") == 0)
+			szMapName[mapLength - 4] = '\0';
 
 		int i = 0;
 		while (szMapName[i] != '_' && szMapName[i] != '\0' && i < sizeof(szMapPrefix) - 1)
@@ -72,8 +81,10 @@ int CHud::MsgFunc_ResetHUD(const char* pszName, int iSize, void* pbuf)
 		szMapPrefix[i] = '_';
 		szMapPrefix[i + 1] = '\0';
 	}
-	gEngfuncs.Cvar_Set(gHUD.cscl_currentmap->name, szMapName);
-	gEngfuncs.Cvar_Set(gHUD.cscl_mapprefix->name, szMapPrefix);
+	if (gHUD.cscl_currentmap)
+		gEngfuncs.Cvar_Set(gHUD.cscl_currentmap->name, szMapName);
+	if (gHUD.cscl_mapprefix)
+		gEngfuncs.Cvar_Set(gHUD.cscl_mapprefix->name, szMapPrefix);
 
 	// reinitialize models. We assume that server already precached all models.
 	// NOTE: we're doing this in ResetHUD instead of InitHUD because it's not being

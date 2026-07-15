@@ -24,6 +24,12 @@
 
 extern cvar_t *hud_textmode;
 
+// Kept as a no-op in normal builds. Diagnostic builds use it to identify the
+// exact engine callback or user message that was active when GoldSrc stopped.
+void CS16_StartupTrace(const char *stage, bool reset = false);
+void CS16_SetRuntimeTrace(bool enabled);
+bool CS16_RuntimeTraceEnabled(void);
+
 #ifdef _MSC_VER
 #pragma warning(disable : 4244) // 'argument': conversion from 'float' to 'int', possible loss of data
 #pragma warning(disable : 4101) // unreferenced local variable
@@ -32,6 +38,23 @@ extern cvar_t *hud_textmode;
 // Macros to hook function calls into the HUD object
 #define HOOK_MESSAGE(x) gEngfuncs.pfnHookUserMsg(#x, __MsgFunc_##x );
 
+#if defined(_CS16CLIENT_STARTUP_TRACE)
+#define DECLARE_MESSAGE(y, x) int __MsgFunc_##x(const char *pszName, int iSize, void *pbuf) \
+							{ \
+							CS16_StartupTrace("Message " #x ": enter"); \
+							const int result = gHUD.y.MsgFunc_##x(pszName, iSize, pbuf ); \
+							CS16_StartupTrace("Message " #x ": complete"); \
+							return result; \
+							}
+
+#define DECLARE_MESSAGE_GHUD(x) \
+    int __MsgFunc_##x(const char* pszName, int iSize, void* pbuf) { \
+        CS16_StartupTrace("Message " #x ": enter"); \
+        const int result = gHUD.MsgFunc_##x(pszName, iSize, pbuf); \
+        CS16_StartupTrace("Message " #x ": complete"); \
+        return result; \
+    }
+#else
 #define DECLARE_MESSAGE(y, x) int __MsgFunc_##x(const char *pszName, int iSize, void *pbuf) \
 							{ \
 							return gHUD.y.MsgFunc_##x(pszName, iSize, pbuf ); \
@@ -41,6 +64,7 @@ extern cvar_t *hud_textmode;
     int __MsgFunc_##x(const char* pszName, int iSize, void* pbuf) { \
         return gHUD.MsgFunc_##x(pszName, iSize, pbuf); \
     }
+#endif
 
 #define HOOK_COMMAND(x, y) gEngfuncs.pfnAddCommand( x, __CmdFunc_##y );
 #define DECLARE_COMMAND(y, x) void __CmdFunc_##x( void ) \

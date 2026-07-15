@@ -1836,6 +1836,11 @@ void V_CalcThirdPersonRefdef(ref_params_t* pparams)
 
 void CL_DLLEXPORT V_CalcRefdef(struct ref_params_s* pparams)
 {
+	static bool tracedFirstRefdef = false;
+	const bool traceThisCall = !tracedFirstRefdef || CS16_RuntimeTraceEnabled();
+	if (traceThisCall)
+		CS16_StartupTrace("V_CalcRefdef: enter");
+
 	// intermission / finale rendering
 	if (pparams->intermission)
 	{
@@ -1854,6 +1859,12 @@ void CL_DLLEXPORT V_CalcRefdef(struct ref_params_s* pparams)
 		V_CalcNormalRefdef(pparams);
 	}
 	s_last = *pparams;
+
+	if (traceThisCall)
+	{
+		CS16_StartupTrace("V_CalcRefdef: complete");
+		tracedFirstRefdef = true;
+	}
 }
 
 /*

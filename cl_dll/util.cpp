@@ -34,6 +34,7 @@
 
 double sqrt(double x);
 
+#if !defined(CLIENT_DLL)
 float Length(const float *v)
 {
 	int		i;
@@ -94,6 +95,7 @@ float VectorNormalize (float *v)
 	return length;
 
 }
+#endif
 
 HSPRITE LoadSprite(const char *pszName)
 {

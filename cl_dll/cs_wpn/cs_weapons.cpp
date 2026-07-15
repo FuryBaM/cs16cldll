@@ -872,6 +872,7 @@ void HUD_InitClientWeapons( void )
 	if ( initialized )
 		return;
 
+	CS16_StartupTrace("HUD_InitClientWeapons: enter");
 	initialized = 1;
 
 	// Set up pointer ( dummy object )
@@ -893,41 +894,53 @@ void HUD_InitClientWeapons( void )
 	g_engfuncs.pfnRandomLong		= gEngfuncs.pfnRandomLong;
 
 	// Allocate a slot for the local player
+	CS16_StartupTrace("HUD_InitClientWeapons: player enter");
 	HUD_PrepEntity( &player	);
+	CS16_StartupTrace("HUD_InitClientWeapons: player complete");
 
 	// Allocate slot(s) for each weapon that we are going to be predicting
 	if( gHUD.GetGameType() != GAME_CZERODS )
 	{
-		HUD_PrepEntity( &g_P228, &player);
-		HUD_PrepEntity( &g_SCOUT, &player);
-		HUD_PrepEntity( &g_HEGrenade, &player);
-		HUD_PrepEntity( &g_XM1014, &player);
-		HUD_PrepEntity( &g_C4, &player);
-		HUD_PrepEntity( &g_MAC10, &player);
-		HUD_PrepEntity( &g_AUG, &player);
-		HUD_PrepEntity( &g_SmokeGrenade, &player);
-		HUD_PrepEntity( &g_ELITE, &player);
-		HUD_PrepEntity( &g_FiveSeven, &player);
-		HUD_PrepEntity( &g_UMP45, &player);
-		HUD_PrepEntity( &g_SG550, &player);
-		HUD_PrepEntity( &g_Galil, &player);
-		HUD_PrepEntity( &g_Famas, &player);
-		HUD_PrepEntity( &g_USP, &player);
-		HUD_PrepEntity( &g_GLOCK18, &player);
-		HUD_PrepEntity( &g_AWP, &player);
-		HUD_PrepEntity( &g_MP5N, &player);
-		HUD_PrepEntity( &g_M249, &player);
-		HUD_PrepEntity( &g_M4A1, &player);
-		HUD_PrepEntity( &g_M3, &player );
-		HUD_PrepEntity( &g_TMP, &player);
-		HUD_PrepEntity( &g_G3SG1, &player);
-		HUD_PrepEntity( &g_Flashbang, &player);
-		HUD_PrepEntity( &g_DEAGLE, &player);
-		HUD_PrepEntity( &g_SG552, &player);
-		HUD_PrepEntity( &g_AK47, &player);
-		HUD_PrepEntity( &g_Knife, &player);
-		HUD_PrepEntity( &g_P90, &player );
+#define PREP_CLIENT_WEAPON(object) \
+		do { \
+			CS16_StartupTrace("HUD_InitClientWeapons: " #object " enter"); \
+			HUD_PrepEntity(&(object), &player); \
+			CS16_StartupTrace("HUD_InitClientWeapons: " #object " complete"); \
+		} while (0)
+
+		PREP_CLIENT_WEAPON(g_P228);
+		PREP_CLIENT_WEAPON(g_SCOUT);
+		PREP_CLIENT_WEAPON(g_HEGrenade);
+		PREP_CLIENT_WEAPON(g_XM1014);
+		PREP_CLIENT_WEAPON(g_C4);
+		PREP_CLIENT_WEAPON(g_MAC10);
+		PREP_CLIENT_WEAPON(g_AUG);
+		PREP_CLIENT_WEAPON(g_SmokeGrenade);
+		PREP_CLIENT_WEAPON(g_ELITE);
+		PREP_CLIENT_WEAPON(g_FiveSeven);
+		PREP_CLIENT_WEAPON(g_UMP45);
+		PREP_CLIENT_WEAPON(g_SG550);
+		PREP_CLIENT_WEAPON(g_Galil);
+		PREP_CLIENT_WEAPON(g_Famas);
+		PREP_CLIENT_WEAPON(g_USP);
+		PREP_CLIENT_WEAPON(g_GLOCK18);
+		PREP_CLIENT_WEAPON(g_AWP);
+		PREP_CLIENT_WEAPON(g_MP5N);
+		PREP_CLIENT_WEAPON(g_M249);
+		PREP_CLIENT_WEAPON(g_M4A1);
+		PREP_CLIENT_WEAPON(g_M3);
+		PREP_CLIENT_WEAPON(g_TMP);
+		PREP_CLIENT_WEAPON(g_G3SG1);
+		PREP_CLIENT_WEAPON(g_Flashbang);
+		PREP_CLIENT_WEAPON(g_DEAGLE);
+		PREP_CLIENT_WEAPON(g_SG552);
+		PREP_CLIENT_WEAPON(g_AK47);
+		PREP_CLIENT_WEAPON(g_Knife);
+		PREP_CLIENT_WEAPON(g_P90);
+
+#undef PREP_CLIENT_WEAPON
 	}
+	CS16_StartupTrace("HUD_InitClientWeapons: complete");
 }
 
 
@@ -1475,9 +1488,18 @@ be ignored
 */
 void CL_DLLEXPORT HUD_PostRunCmd( local_state_t *from, local_state_t *to, struct usercmd_s *cmd, int runfuncs, double time, unsigned int random_seed )
 {
+	static bool tracedFirstPostRunCmd = false;
+	const bool traceThisCall = !tracedFirstPostRunCmd || CS16_RuntimeTraceEnabled();
+	if (traceThisCall)
+		CS16_StartupTrace("HUD_PostRunCmd: enter");
+
 	g_runfuncs = runfuncs;
 
+	if (traceThisCall)
+		CS16_StartupTrace("HUD_PostRunCmd: HUD_WeaponsPostThink enter");
 	HUD_WeaponsPostThink( from, to, cmd, time, random_seed );
+	if (traceThisCall)
+		CS16_StartupTrace("HUD_PostRunCmd: HUD_WeaponsPostThink complete");
 	to->client.fov = g_lastFOV;
 
 	if ( g_runfuncs )
@@ -1486,5 +1508,11 @@ void CL_DLLEXPORT HUD_PostRunCmd( local_state_t *from, local_state_t *to, struct
 		g_rseq		= to->playerstate.sequence;
 		g_clang		= cmd->viewangles;
 		g_clorg		= to->playerstate.origin;
+	}
+
+	if (traceThisCall)
+	{
+		CS16_StartupTrace("HUD_PostRunCmd: complete");
+		tracedFirstPostRunCmd = true;
 	}
 }

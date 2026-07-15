@@ -25,8 +25,13 @@
 #include "pm_shared.h"
 
 #include <string.h>
+#if defined(_WIN32) && defined(_CS16CLIENT_STARTUP_TRACE)
+#include <windows.h>
+#include <stdio.h>
+#endif
 #include "interface.h" // not used here
 #include "Exports.h"
+#include "cs_vgui.h"
 
 cl_enginefunc_t		gEngfuncs = { };
 CHud gHUD;
@@ -35,10 +40,111 @@ CHud gHUD;
 CSysModule* g_hParticleManModule = NULL;
 IParticleMan* g_pParticleMan = NULL;
 
+#if defined(_WIN32) && defined(_CS16CLIENT_STARTUP_TRACE)
+static bool g_cs16RuntimeTrace = false;
+static PVOID g_cs16ExceptionHandler = NULL;
+
+void CS16_StartupTrace(const char* stage, bool reset)
+{
+	char path[MAX_PATH];
+	const char filename[] = "cs16_goldsrc_startup.log";
+	const DWORD length = GetTempPathA(sizeof(path), path);
+	if (!length || length + sizeof(filename) > sizeof(path))
+		return;
+
+	memcpy(path + length, filename, sizeof(filename));
+	HANDLE file = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
+		NULL, reset ? CREATE_ALWAYS : OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (file == INVALID_HANDLE_VALUE)
+		return;
+
+	SetFilePointer(file, 0, NULL, FILE_END);
+	DWORD written = 0;
+	WriteFile(file, stage, (DWORD)strlen(stage), &written, NULL);
+	WriteFile(file, "\r\n", 2, &written, NULL);
+	CloseHandle(file);
+}
+
+void CS16_SetRuntimeTrace(bool enabled)
+{
+	g_cs16RuntimeTrace = enabled;
+}
+
+bool CS16_RuntimeTraceEnabled(void)
+{
+	return g_cs16RuntimeTrace;
+}
+
+static LONG CALLBACK CS16_ExceptionTrace(EXCEPTION_POINTERS* exceptionInfo)
+{
+	// OutputDebugString raises these informational exceptions when a debugger
+	// is absent. They are handled by Windows and are not game crashes.
+	if (exceptionInfo && exceptionInfo->ExceptionRecord &&
+		(exceptionInfo->ExceptionRecord->ExceptionCode == 0x40010006 ||
+		 exceptionInfo->ExceptionRecord->ExceptionCode == 0x4001000A))
+	{
+		return EXCEPTION_CONTINUE_SEARCH;
+	}
+
+	static LONG handlingException = 0;
+	if (!exceptionInfo || !exceptionInfo->ExceptionRecord || !exceptionInfo->ContextRecord ||
+		InterlockedExchange(&handlingException, 1) != 0)
+	{
+		return EXCEPTION_CONTINUE_SEARCH;
+	}
+
+	const ULONG_PTR address = (ULONG_PTR)exceptionInfo->ExceptionRecord->ExceptionAddress;
+	MEMORY_BASIC_INFORMATION memoryInfo = {};
+	VirtualQuery((LPCVOID)address, &memoryInfo, sizeof(memoryInfo));
+	const ULONG_PTR moduleBase = (ULONG_PTR)memoryInfo.AllocationBase;
+
+	char modulePath[MAX_PATH] = "unknown";
+	if (moduleBase)
+		GetModuleFileNameA((HMODULE)moduleBase, modulePath, sizeof(modulePath));
+
+	char stage[512];
+	snprintf(stage, sizeof(stage),
+		"EXCEPTION code=0x%08lX address=0x%08lX module_base=0x%08lX rva=0x%08lX module=%s",
+		(unsigned long)exceptionInfo->ExceptionRecord->ExceptionCode,
+		(unsigned long)address,
+		(unsigned long)moduleBase,
+		(unsigned long)(moduleBase ? address - moduleBase : 0),
+		modulePath);
+	CS16_StartupTrace(stage);
+
+#if defined(_M_IX86) || defined(__i386__)
+	snprintf(stage, sizeof(stage),
+		"CONTEXT eip=0x%08lX esp=0x%08lX ebp=0x%08lX eax=0x%08lX ebx=0x%08lX ecx=0x%08lX edx=0x%08lX",
+		(unsigned long)exceptionInfo->ContextRecord->Eip,
+		(unsigned long)exceptionInfo->ContextRecord->Esp,
+		(unsigned long)exceptionInfo->ContextRecord->Ebp,
+		(unsigned long)exceptionInfo->ContextRecord->Eax,
+		(unsigned long)exceptionInfo->ContextRecord->Ebx,
+		(unsigned long)exceptionInfo->ContextRecord->Ecx,
+		(unsigned long)exceptionInfo->ContextRecord->Edx);
+	CS16_StartupTrace(stage);
+#endif
+
+	InterlockedExchange(&handlingException, 0);
+	return EXCEPTION_CONTINUE_SEARCH;
+}
+
+static void CS16_InstallExceptionTrace(void)
+{
+	if (!g_cs16ExceptionHandler)
+		g_cs16ExceptionHandler = AddVectoredExceptionHandler(1, CS16_ExceptionTrace);
+}
+#else
+void CS16_StartupTrace(const char*, bool) {}
+void CS16_SetRuntimeTrace(bool) {}
+bool CS16_RuntimeTraceEnabled(void) { return false; }
+#endif
+
 void InitInput(void);
 void Game_HookEvents(void);
 void IN_Commands(void);
 void Input_Shutdown(void);
+void CL_LoadParticleMan(void);
 
 /*
 ==========================
@@ -49,12 +155,23 @@ Called when the DLL is first loaded.
 */
 int CL_DLLEXPORT Initialize(cl_enginefunc_t* pEnginefuncs, int iVersion)
 {
+	CS16_StartupTrace("Initialize: enter", true);
+#if defined(_WIN32) && defined(_CS16CLIENT_STARTUP_TRACE)
+	CS16_InstallExceptionTrace();
+#endif
 	if (iVersion != CLDLL_INTERFACE_VERSION)
+	{
+		CS16_StartupTrace("Initialize: incompatible interface version");
 		return 0;
+	}
 
 	gEngfuncs = *pEnginefuncs;
+	CS16_StartupTrace("Initialize: engine table copied");
 
 	Game_HookEvents();
+	CS16_StartupTrace("Initialize: events hooked");
+	CL_LoadParticleMan();
+	CS16_StartupTrace("Initialize: complete");
 	return 1;
 }
 
@@ -116,7 +233,9 @@ int	CL_DLLEXPORT HUD_ConnectionlessPacket(const struct netadr_s* net_from, const
 
 void CL_DLLEXPORT HUD_PlayerMoveInit(struct playermove_s* ppmove)
 {
+	CS16_StartupTrace("HUD_PlayerMoveInit: enter");
 	PM_Init(ppmove);
+	CS16_StartupTrace("HUD_PlayerMoveInit: complete");
 }
 
 char CL_DLLEXPORT HUD_PlayerMoveTexture(char* name)
@@ -126,7 +245,16 @@ char CL_DLLEXPORT HUD_PlayerMoveTexture(char* name)
 
 void CL_DLLEXPORT HUD_PlayerMove(struct playermove_s* ppmove, int server)
 {
+	static bool tracedFirstMove = false;
+	const bool traceThisCall = !tracedFirstMove || CS16_RuntimeTraceEnabled();
+	if (traceThisCall)
+		CS16_StartupTrace("HUD_PlayerMove: enter");
 	PM_Move(ppmove, server);
+	if (traceThisCall)
+	{
+		CS16_StartupTrace("HUD_PlayerMove: complete");
+		tracedFirstMove = true;
+	}
 }
 
 #ifdef _CS16CLIENT_ENABLE_GSRC_SUPPORT
@@ -162,9 +290,10 @@ so the HUD can reinitialize itself.
 
 int CL_DLLEXPORT HUD_VidInit(void)
 {
+	CS16_StartupTrace("HUD_VidInit: enter");
 	gHUD.VidInit();
-
-	//VGui_Startup();
+	CS16VGUI_Startup(ScreenWidth, ScreenHeight);
+	CS16_StartupTrace("HUD_VidInit: complete");
 
 	return 1;
 }
@@ -180,8 +309,15 @@ the hud variables.
 */
 void CL_DLLEXPORT HUD_Init(void)
 {
-	gHUD.Init();
+	CS16_StartupTrace("HUD_Init: enter");
+	// Match Valve's GoldSrc order: input cvars and commands must exist before
+	// individual HUD elements initialize.
 	InitInput();
+	CS16_StartupTrace("HUD_Init: input initialized");
+	gHUD.Init();
+	CS16VGUI_ResetSession();
+	gEngfuncs.Cvar_SetValue("_vgui_menus", CS16VGUI_IsAvailable() ? 1.0f : 0.0f);
+	CS16_StartupTrace("HUD_Init: complete");
 	//Scheme_Init();
 }
 
@@ -197,7 +333,18 @@ redraw the HUD.
 
 int CL_DLLEXPORT HUD_Redraw(float time, int intermission)
 {
+	static bool tracedFirstLevelRedraw = false;
+	const char* levelName = gEngfuncs.pfnGetLevelName();
+	const bool traceThisCall = ((!tracedFirstLevelRedraw && levelName && levelName[0]) ||
+		CS16_RuntimeTraceEnabled());
+	if (traceThisCall)
+		CS16_StartupTrace("HUD_Redraw: enter");
 	gHUD.Redraw(time, intermission);
+	if (traceThisCall)
+	{
+		CS16_StartupTrace("HUD_Redraw: complete");
+		tracedFirstLevelRedraw = true;
+	}
 
 	return 1;
 }
@@ -218,9 +365,21 @@ returns 1 if anything has been changed, 0 otherwise.
 
 int CL_DLLEXPORT HUD_UpdateClientData(client_data_t* pcldata, float flTime)
 {
+	static bool tracedFirstLevelClientData = false;
+	const char* levelName = gEngfuncs.pfnGetLevelName();
+	const bool traceThisCall = ((!tracedFirstLevelClientData && levelName && levelName[0]) ||
+		CS16_RuntimeTraceEnabled());
+	if (traceThisCall)
+		CS16_StartupTrace("HUD_UpdateClientData: enter");
 	IN_Commands();
 
-	return gHUD.UpdateClientData(pcldata, flTime);
+	const int result = gHUD.UpdateClientData(pcldata, flTime);
+	if (traceThisCall)
+	{
+		CS16_StartupTrace("HUD_UpdateClientData: complete");
+		tracedFirstLevelClientData = true;
+	}
+	return result;
 }
 
 /*
@@ -246,11 +405,35 @@ Called by engine every frame that client .dll is loaded
 
 void CL_DLLEXPORT HUD_Frame(double time)
 {
+	static bool tracedFirstFrame = false;
+	if (!tracedFirstFrame)
+	{
+		CS16_StartupTrace("HUD_Frame: first frame");
+		tracedFirstFrame = true;
+	}
+	else if (CS16_RuntimeTraceEnabled())
+	{
+		CS16_StartupTrace("HUD_Frame: enter");
+	}
+
 #ifdef _CS16CLIENT_ENABLE_GSRC_SUPPORT
+	// Advertise VGUI menus only after the native GoldSrc viewport has attached
+	// successfully. Unsupported menu IDs disable it for the current session and
+	// automatically restore the ShowMenu protocol.
+	const float wantedVguiMenus = CS16VGUI_IsAvailable() ? 1.0f : 0.0f;
+	if (CVAR_GET_FLOAT("_vgui_menus") != wantedVguiMenus)
+	{
+		if (wantedVguiMenus == 0.0f)
+			CS16VGUI_HideMenu();
+		gEngfuncs.Cvar_SetValue("_vgui_menus", wantedVguiMenus);
+	}
+
 	gEngfuncs.VGui_ViewportPaintBackground(HUD_GetRect());
 #endif
 
 	GetClientVoiceMgr()->Frame(time);
+	if (tracedFirstFrame && CS16_RuntimeTraceEnabled())
+		CS16_StartupTrace("HUD_Frame: complete");
 }
 
 
@@ -266,7 +449,7 @@ void CL_DLLEXPORT HUD_VoiceStatus(int entindex, qboolean bTalking)
 {
 	// gHUD.m_Radio.Voice( entindex, bTalking );
 
-	if (entindex >= 0 && entindex < gEngfuncs.GetMaxClients())
+	if (entindex > 0 && entindex <= gEngfuncs.GetMaxClients())
 	{
 		if (bTalking)
 		{
@@ -298,7 +481,8 @@ void CL_DLLEXPORT HUD_DirectorMessage(int iSize, void* pbuf)
 
 void CL_UnloadParticleMan(void)
 {
-	Sys_UnloadModule(g_hParticleManModule);
+	if (g_hParticleManModule)
+		Sys_UnloadModule(g_hParticleManModule);
 
 	g_pParticleMan = NULL;
 	g_hParticleManModule = NULL;
@@ -306,6 +490,12 @@ void CL_UnloadParticleMan(void)
 
 void CL_LoadParticleMan(void)
 {
+#if !defined(_MSC_VER)
+	// particleman.dll exposes an MSVC C++ vtable. MinGW can safely use the
+	// engine's C function tables, but it cannot call this cross-module ABI.
+	CS16_StartupTrace("Initialize: particleman skipped (non-MSVC ABI)");
+	return;
+#else
 	char szPDir[512];
 
 	if (gEngfuncs.COM_ExpandFilename(PARTICLEMAN_DLLNAME, szPDir, sizeof(szPDir)) == FALSE)
@@ -316,10 +506,17 @@ void CL_LoadParticleMan(void)
 	}
 
 	g_hParticleManModule = Sys_LoadModule(szPDir);
+	if (!g_hParticleManModule)
+	{
+		g_pParticleMan = NULL;
+		return;
+	}
+
 	CreateInterfaceFn particleManFactory = Sys_GetFactory(g_hParticleManModule);
 
 	if (particleManFactory == NULL)
 	{
+		Sys_UnloadModule(g_hParticleManModule);
 		g_pParticleMan = NULL;
 		g_hParticleManModule = NULL;
 		return;
@@ -334,6 +531,12 @@ void CL_LoadParticleMan(void)
 		// Add custom particle classes here BEFORE calling anything else or you will die.
 		g_pParticleMan->AddCustomParticleClassSize(sizeof(CBaseParticle));
 	}
+	else
+	{
+		Sys_UnloadModule(g_hParticleManModule);
+		g_hParticleManModule = NULL;
+	}
+#endif
 }
 
 cldll_func_dst_t* g_pcldstAddrs;
@@ -344,7 +547,7 @@ extern "C" void CL_DLLEXPORT HUD_ChatInputPosition(int* x, int* y)
 
 extern "C" int CL_DLLEXPORT HUD_GetPlayerTeam(int iplayer)
 {
-	if (iplayer <= MAX_PLAYERS)
+	if (iplayer > 0 && iplayer <= MAX_PLAYERS)
 		return g_PlayerExtraInfo[iplayer].teamnumber;
 	return 0;
 }
@@ -399,11 +602,14 @@ extern "C" void CL_DLLEXPORT F(void* pv)
 	HUD_DirectorMessage,
 	HUD_GetStudioModelInterface,
 	HUD_ChatInputPosition,
+	HUD_GetPlayerTeam,
+	NULL
 	};
 
 	*pcldll_func = cldll_func;
 }
 
+#if defined(_MSC_VER)
 #include "cl_dll/IGameClientExports.h"
 
 //-----------------------------------------------------------------------------
@@ -445,4 +651,4 @@ public:
 };
 
 EXPOSE_SINGLE_INTERFACE(CClientExports, IGameClientExports, GAMECLIENTEXPORTS_INTERFACE_VERSION)
-
+#endif
