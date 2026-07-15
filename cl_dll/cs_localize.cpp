@@ -270,7 +270,9 @@ void AddFallbackMessages()
         { "VIP_Assassinated", "VIP has been assassinated!" },
         { "Terrorists_Escaped", "The terrorists have escaped!" },
         { "CTs_PreventEscape", "The CTs have prevented most of the terrorists from escaping!" },
-        { "Escaping_Terrorists_Neutralized", "Escaping terrorists have all been neutralized!" }
+        { "Escaping_Terrorists_Neutralized", "Escaping terrorists have all been neutralized!" },
+        { "Cstrike_BuyMenuAutobuy", "&A AUTO-BUY" },
+        { "Cstrike_BuyMenuRebuy", "&R RE-BUY PREVIOUS" }
     };
 
     for (int i = 0; i < (int)(sizeof(fallback) / sizeof(fallback[0])); ++i)

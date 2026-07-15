@@ -548,6 +548,109 @@ extern "C" void CS16VGUI_CommandMenuExecute(int itemIndex)
     ExecuteCommandMenuItem(itemIndex);
 }
 
+extern "C" int CS16VGUI_LocalizeResourceText(const char* text, char* output, int outputSize)
+{
+    if (!output || outputSize <= 0)
+        return 0;
+
+    const char* localized = CS16_Localize(text ? text : "");
+    CopyCommandMenuDisplayText(output, outputSize, localized);
+    return output[0] != '\0';
+}
+
+extern "C" int CS16VGUI_LoadResourceLayout(const char* filename,
+    cs16_vgui_resource_control_t* controls, int maxControls)
+{
+    if (!filename || !filename[0] || !controls || maxControls <= 0 ||
+        !gEngfuncs.COM_LoadFile || !gEngfuncs.COM_ParseFile || !gEngfuncs.COM_FreeFile)
+        return 0;
+
+    int fileLength = 0;
+    byte* source = gEngfuncs.COM_LoadFile((char*)filename, 5, &fileLength);
+    if (!source)
+        return 0;
+
+    char token[1024];
+    char* cursor = (char*)source;
+    if (fileLength >= 3 && source[0] == 0xef && source[1] == 0xbb && source[2] == 0xbf)
+        cursor += 3;
+
+    // Skip the resource name and enter its root KeyValues block.
+    cursor = gEngfuncs.COM_ParseFile(cursor, token);
+    if (!cursor)
+    {
+        gEngfuncs.COM_FreeFile(source);
+        return 0;
+    }
+    cursor = gEngfuncs.COM_ParseFile(cursor, token);
+    if (!cursor || strcmp(token, "{"))
+    {
+        gEngfuncs.COM_FreeFile(source);
+        return 0;
+    }
+
+    int count = 0;
+    while (count < maxControls && (cursor = gEngfuncs.COM_ParseFile(cursor, token)) != NULL)
+    {
+        if (!strcmp(token, "}"))
+            break;
+
+        cs16_vgui_resource_control_t& control = controls[count];
+        memset(&control, 0, sizeof(control));
+        control.visible = 1;
+        control.enabled = 1;
+        CopyCommandMenuText(control.fieldName, sizeof(control.fieldName), token);
+
+        cursor = gEngfuncs.COM_ParseFile(cursor, token);
+        if (!cursor || strcmp(token, "{"))
+            break;
+
+        while ((cursor = gEngfuncs.COM_ParseFile(cursor, token)) != NULL)
+        {
+            if (!strcmp(token, "}"))
+                break;
+
+            char key[128];
+            CopyCommandMenuText(key, sizeof(key), token);
+            cursor = gEngfuncs.COM_ParseFile(cursor, token);
+            if (!cursor)
+                break;
+
+            if (!stricmp(key, "fieldName"))
+                CopyCommandMenuText(control.fieldName, sizeof(control.fieldName), token);
+            else if (!stricmp(key, "ControlName"))
+                CopyCommandMenuText(control.controlName, sizeof(control.controlName), token);
+            else if (!stricmp(key, "labelText"))
+                CopyCommandMenuText(control.labelText, sizeof(control.labelText), token);
+            else if (!stricmp(key, "command"))
+                CopyCommandMenuText(control.command, sizeof(control.command), token);
+            else if (!stricmp(key, "textAlignment"))
+                CopyCommandMenuText(control.textAlignment, sizeof(control.textAlignment), token);
+            else if (!stricmp(key, "font"))
+                CopyCommandMenuText(control.font, sizeof(control.font), token);
+            else if (!stricmp(key, "xpos"))
+                control.xpos = atoi(token);
+            else if (!stricmp(key, "ypos"))
+                control.ypos = atoi(token);
+            else if (!stricmp(key, "wide"))
+                control.wide = atoi(token);
+            else if (!stricmp(key, "tall"))
+                control.tall = atoi(token);
+            else if (!stricmp(key, "visible"))
+                control.visible = atoi(token);
+            else if (!stricmp(key, "enabled"))
+                control.enabled = atoi(token);
+        }
+
+        ++count;
+        if (!cursor)
+            break;
+    }
+
+    gEngfuncs.COM_FreeFile(source);
+    return count;
+}
+
 extern "C" void* CS16VGUI_GetRootPanel(void)
 {
     return gEngfuncs.VGui_GetPanel ? gEngfuncs.VGui_GetPanel() : NULL;

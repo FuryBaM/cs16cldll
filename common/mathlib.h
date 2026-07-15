@@ -57,10 +57,10 @@ void _VectorSubtract (vec3_t veca, vec3_t vecb, vec3_t out);
 void _VectorAdd (vec3_t veca, vec3_t vecb, vec3_t out);
 void _VectorCopy (vec3_t in, vec3_t out);
 
-int VectorCompare (const vec3_t v1, const vec3_t v2);
-float Length (const vec3_t v);
+int VectorCompare (const vec_t *v1, const vec_t *v2);
+float Length (const vec_t *v);
 void CrossProduct (const vec3_t v1, const vec3_t v2, vec3_t cross);
-float VectorNormalize (vec3_t v);		// returns vector length
+float VectorNormalize (vec_t *v);		// returns vector length
 void VectorInverse (vec3_t v);
 void VectorScale (const vec3_t in, vec_t scale, vec3_t out);
 int Q_log2(int val);
@@ -122,9 +122,9 @@ void AngleVectors (const vec3_t angles, vec3_t forward, vec3_t right, vec3_t up)
 void AngleVectorsTranspose (const vec3_t angles, vec3_t forward, vec3_t right, vec3_t up);
 #define AngleIVectors	AngleVectorsTranspose
 
-void AngleMatrix (const vec3_t angles, float (*matrix)[4] );
+void AngleMatrix (const vec_t *angles, float (*matrix)[4] );
 void AngleIMatrix (const vec3_t angles, float (*matrix)[4] );
-void VectorTransform (const vec3_t in1, float in2[3][4], vec3_t out);
+void VectorTransform (const vec_t *in1, float in2[3][4], vec_t *out);
 
 void NormalizeAngles(float* angles);
 void InterpolateAngles( vec3_t start, vec3_t end, vec3_t output, float frac );
@@ -132,7 +132,7 @@ float AngleBetweenVectors( const vec3_t v1, const vec3_t v2 );
 
 
 void VectorMatrix( vec3_t forward, vec3_t right, vec3_t up);
-void VectorAngles( const vec3_t forward, vec3_t angles );
+void VectorAngles( const vec_t *forward, vec_t *angles );
 
 int InvertMatrix( const float * m, float *out );
 

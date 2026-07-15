@@ -9,9 +9,12 @@
 #include <VGUI_ActionSignal.h>
 #include <VGUI_App.h>
 #include <VGUI_Button.h>
+#include <VGUI_ImagePanel.h>
 #include <VGUI_Label.h>
 #include <VGUI_Panel.h>
 #include <VGUI_Scheme.h>
+#include "cs_vgui.h"
+#include "vgui_loadtga.h"
 #include <windows.h>
 #include <stdio.h>
 #include <string.h>
@@ -58,6 +61,22 @@ enum
     GOLDSRC_KEY_ESCAPE = 27,
     MAX_COMMAND_MENU_BUTTONS = 10,
     COMMAND_MENU_PAGE_SIZE = 8
+};
+
+// Match the visual language used by Velaron/cs16-client's active HUD UI:
+// translucent black surfaces, the classic Counter-Strike orange accent and
+// a light accent wash for hover/selection. VGUI1 stores transparency (0 is
+// opaque, 255 is invisible), so these alpha values are the inverse of the
+// regular HUD FillRGBABlend values.
+enum
+{
+    VELARON_ACCENT_R = 255,
+    VELARON_ACCENT_G = 140,
+    VELARON_ACCENT_B = 0,
+    VELARON_PANEL_TRANSPARENCY = 102,
+    VELARON_BUTTON_TRANSPARENCY = 128,
+    VELARON_HOVER_TRANSPARENCY = 207,
+    VELARON_SELECTED_TRANSPARENCY = 176
 };
 
 struct BuyEntry
@@ -121,6 +140,31 @@ static const BuyEntry g_equipmentCT[] =
 
 class CCSViewport;
 
+class CPreviewImagePanel final : public vgui::ImagePanel
+{
+public:
+    CPreviewImagePanel()
+    {
+        setPaintBackgroundEnabled(true);
+        setVisible(false);
+    }
+
+    void ShowImage(vgui::BitmapTGA* image)
+    {
+        if (!image)
+            return;
+
+        int panelWide = 0, panelTall = 0;
+        int imageWide = 0, imageTall = 0;
+        getPaintSize(panelWide, panelTall);
+        image->getSize(imageWide, imageTall);
+        image->setPos((panelWide - imageWide) / 2, (panelTall - imageTall) / 2);
+        setImage(image);
+        setVisible(true);
+        repaint();
+    }
+};
+
 class CMenuActionSignal final : public vgui::ActionSignal
 {
 public:
@@ -148,24 +192,81 @@ class CCSMenuButton : public vgui::Button
 {
 public:
     CCSMenuButton(const char* text, int x, int y, int wide, int tall)
-        : vgui::Button(text, x, y, wide, tall)
+        : vgui::Button(text, x, y, wide, tall), m_previewPanel(NULL),
+          m_previewImage(NULL)
     {
+        m_previewPath[0] = '\0';
         setButtonBorderEnabled(false);
         setPaintBackgroundEnabled(true);
     }
+
+    void SetPreview(CPreviewImagePanel* panel, const char* imageName)
+    {
+        m_previewPanel = panel;
+        m_previewImage = NULL;
+        m_previewPath[0] = '\0';
+        if (!panel || !imageName || !imageName[0])
+            return;
+
+        _snprintf(m_previewPath, sizeof(m_previewPath), "gfx/vgui/%s.tga", imageName);
+        m_previewPath[sizeof(m_previewPath) - 1] = '\0';
+    }
+
+    bool HasPreview() const
+    {
+        return m_previewPanel && m_previewPath[0];
+    }
+
+    void ShowPreview()
+    {
+        if (!HasPreview())
+            return;
+
+        if (!m_previewImage)
+            m_previewImage = vgui_LoadTGA(m_previewPath);
+        if (m_previewImage)
+            m_previewPanel->ShowImage(m_previewImage);
+    }
+
 protected:
     void paintBackground() override
     {
         int wide = 0, tall = 0;
         getPaintSize(wide, tall);
-        if (isArmed()) drawSetColor(88, 67, 26, 0);
-        else if (isSelected()) drawSetColor(66, 55, 28, 0);
-        else drawSetColor(27, 34, 28, 0);
+
+        if (isArmed())
+        {
+            ShowPreview();
+            drawSetColor(VELARON_ACCENT_R, VELARON_ACCENT_G,
+                VELARON_ACCENT_B, VELARON_HOVER_TRANSPARENCY);
+        }
+        else if (isSelected())
+            drawSetColor(VELARON_ACCENT_R, VELARON_ACCENT_G,
+                VELARON_ACCENT_B, VELARON_SELECTED_TRANSPARENCY);
+        else
+            drawSetColor(0, 0, 0, VELARON_BUTTON_TRANSPARENCY);
+
         drawFilledRect(0, 0, wide, tall);
-        drawSetColor(isArmed() ? 224 : 145, isArmed() ? 160 : 103, 30, 0);
+        drawSetColor(VELARON_ACCENT_R, VELARON_ACCENT_G, VELARON_ACCENT_B, 0);
         drawOutlinedRect(0, 0, wide, tall);
     }
+
+private:
+    CPreviewImagePanel* m_previewPanel;
+    vgui::BitmapTGA* m_previewImage;
+    char m_previewPath[128];
 };
+
+static const char* PreviewImageName(const char* fieldName)
+{
+    if (!fieldName || !fieldName[0] || !stricmp(fieldName, "CancelButton"))
+        return NULL;
+    if (!stricmp(fieldName, "autoselect_t") || !stricmp(fieldName, "militia"))
+        return "t_random";
+    if (!stricmp(fieldName, "autoselect_ct") || !stricmp(fieldName, "spetsnaz"))
+        return "ct_random";
+    return fieldName;
+}
 
 static int g_nextCommandTexture = 4100;
 
@@ -240,7 +341,7 @@ private:
             ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Tahoma");
         HGDIOBJ oldFont = font ? SelectObject(dc, font) : NULL;
         SetBkMode(dc, TRANSPARENT);
-        SetTextColor(dc, RGB(255, 255, 255));
+        SetTextColor(dc, RGB(VELARON_ACCENT_R, VELARON_ACCENT_G, VELARON_ACCENT_B));
         RECT rect = { 0, 0, wide, tall };
         DrawTextW(dc, m_text, -1, &rect, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
@@ -249,9 +350,9 @@ private:
         for (int i = 0; i < wide * tall; ++i)
         {
             const unsigned char alpha = bgra[i * 4 + 2];
-            rgba[i * 4 + 0] = 255;
-            rgba[i * 4 + 1] = 255;
-            rgba[i * 4 + 2] = 255;
+            rgba[i * 4 + 0] = VELARON_ACCENT_R;
+            rgba[i * 4 + 1] = VELARON_ACCENT_G;
+            rgba[i * 4 + 2] = VELARON_ACCENT_B;
             rgba[i * 4 + 3] = alpha;
         }
         drawSetTextureRGBA(m_texture, reinterpret_cast<const char*>(rgba), wide, tall);
@@ -277,15 +378,30 @@ private:
 class CCSMenuPanel : public vgui::Panel
 {
 public:
-    CCSMenuPanel(const char* titleText, int height) : vgui::Panel(0, 0, 510, height)
+    CCSMenuPanel(const char* titleText, int height, int width = 510)
+        : vgui::Panel(0, 0, width, height), m_buttonCount(0),
+          m_decorationCount(0), m_titleBottom(50), m_resourceLayout(false),
+          m_resourceXpos(0), m_resourceYpos(0), m_hasPreviewPanel(false)
     {
         setPaintBackgroundEnabled(true);
-        vgui::Label* title = new vgui::Label(titleText, 20, 14, 470, 36);
-        title->setParent(this);
-        title->setContentAlignment(vgui::Label::a_center);
-        title->setFgColor(255, 180, 32, 0);
-        title->setPaintBackgroundEnabled(false);
+        m_preview = new CPreviewImagePanel();
+        m_preview->setParent(this);
+        m_title = new vgui::Label(titleText, 20, 14, width - 40, 36);
+        m_title->setParent(this);
+        m_title->setContentAlignment(vgui::Label::a_center);
+        m_title->setFgColor(VELARON_ACCENT_R, VELARON_ACCENT_G, VELARON_ACCENT_B, 0);
+        m_title->setPaintBackgroundEnabled(false);
     }
+
+    bool GetResourcePosition(int& x, int& y) const
+    {
+        if (!m_resourceLayout)
+            return false;
+        x = m_resourceXpos;
+        y = m_resourceYpos;
+        return true;
+    }
+
 protected:
     void AddButton(CCSViewport* viewport, const char* text, int y,
         const char* command, int targetMenu, int tall = 30)
@@ -293,19 +409,186 @@ protected:
         vgui::Button* button = new CCSMenuButton(text, 40, y, 430, tall);
         button->setParent(this);
         button->setContentAlignment(vgui::Label::a_west);
-        button->setFgColor(230, 230, 220, 0);
+        button->setFgColor(VELARON_ACCENT_R, VELARON_ACCENT_G, VELARON_ACCENT_B, 0);
         button->addActionSignal(new CMenuActionSignal(viewport, command, targetMenu));
+        if (m_buttonCount < (int)(sizeof(m_buttons) / sizeof(m_buttons[0])))
+            m_buttons[m_buttonCount++] = button;
+    }
+
+    bool LoadResource(const char* filename)
+    {
+        cs16_vgui_resource_control_t controls[CS16_VGUI_MAX_RESOURCE_CONTROLS];
+        const int controlCount = CS16VGUI_LoadResourceLayout(filename, controls,
+            CS16_VGUI_MAX_RESOURCE_CONTROLS);
+        if (controlCount <= 0)
+            return false;
+
+        int resourceButton = 0;
+        bool titleApplied = false;
+        m_decorationCount = 0;
+        m_hasPreviewPanel = false;
+
+        // The stock MouseOverPanelButton does not contain the picture itself:
+        // it targets ClassInfo/ItemInfo and loads gfx/vgui/<fieldName>.tga.
+        // Locate that target before assigning buttons, regardless of ordering
+        // in the .res file (ClassInfo is deliberately marked invisible).
+        int panelWide = 0, panelTall = 0;
+        getSize(panelWide, panelTall);
+        for (int i = 0; i < controlCount; ++i)
+        {
+            const cs16_vgui_resource_control_t& control = controls[i];
+            const bool isPreviewPanel = !stricmp(control.controlName, "Panel") &&
+                (!stricmp(control.fieldName, "ClassInfo") ||
+                 !stricmp(control.fieldName, "ItemInfo"));
+            if (isPreviewPanel && control.wide > 0 && control.tall > 0 &&
+                control.xpos >= 0 && control.ypos >= 0 &&
+                control.xpos < panelWide && control.ypos < panelTall)
+            {
+                m_preview->setBounds(control.xpos, control.ypos,
+                    control.wide, control.tall);
+                m_preview->setVisible(false);
+                m_hasPreviewPanel = true;
+                break;
+            }
+        }
+
+        CCSMenuButton* firstPreview = NULL;
+
+        for (int i = 0; i < controlCount; ++i)
+        {
+            cs16_vgui_resource_control_t& control = controls[i];
+            const bool isRoot = !stricmp(control.controlName, "Frame") ||
+                !stricmp(control.controlName, "WizardSubPanel");
+            if (isRoot && control.wide > 0 && control.tall > 0)
+            {
+                setSize(control.wide, control.tall);
+                m_resourceXpos = control.xpos;
+                m_resourceYpos = control.ypos;
+                continue;
+            }
+
+            const bool isButton = !stricmp(control.controlName, "Button") ||
+                !stricmp(control.controlName, "MouseOverPanelButton");
+            if (isButton)
+            {
+                if (resourceButton >= m_buttonCount)
+                    continue;
+
+                vgui::Button* button = m_buttons[resourceButton++];
+                if (control.wide > 0 && control.tall > 0)
+                    button->setBounds(control.xpos, control.ypos, control.wide, control.tall);
+
+                if (control.labelText[0])
+                {
+                    char text[256];
+                    CS16VGUI_LocalizeResourceText(control.labelText, text, sizeof(text));
+                    button->setText(sizeof(text), text);
+                }
+
+                button->setContentAlignment(!stricmp(control.textAlignment, "center")
+                    ? vgui::Label::a_center : vgui::Label::a_west);
+                button->setVisible(control.visible != 0);
+                button->setEnabled(control.enabled != 0);
+                if (!stricmp(control.controlName, "MouseOverPanelButton") &&
+                    m_hasPreviewPanel)
+                {
+                    CCSMenuButton* menuButton = static_cast<CCSMenuButton*>(button);
+                    menuButton->SetPreview(m_preview, PreviewImageName(control.fieldName));
+                    if (!firstPreview && menuButton->HasPreview())
+                        firstPreview = menuButton;
+                }
+                continue;
+            }
+
+            if (!stricmp(control.controlName, "Label") && !titleApplied &&
+                (!stricmp(control.font, "Title") || !stricmp(control.fieldName, "Title") ||
+                 !stricmp(control.fieldName, "joinTeam") || !stricmp(control.fieldName, "joinClass")))
+            {
+                if (control.wide > 0 && control.tall > 0)
+                    m_title->setBounds(control.xpos, control.ypos, control.wide, control.tall);
+                if (control.labelText[0])
+                {
+                    char text[256];
+                    CS16VGUI_LocalizeResourceText(control.labelText, text, sizeof(text));
+                    m_title->setText(sizeof(text), text);
+                }
+                m_title->setContentAlignment(!stricmp(control.textAlignment, "center")
+                    ? vgui::Label::a_center : vgui::Label::a_west);
+                m_titleBottom = control.ypos + control.tall;
+                titleApplied = true;
+                continue;
+            }
+
+            const bool isDivider = !stricmp(control.controlName, "Divider");
+            const bool isInfoPanel = !stricmp(control.controlName, "Panel") ||
+                !stricmp(control.controlName, "HTML");
+            const bool isPreviewDecoration = m_hasPreviewPanel &&
+                !stricmp(control.controlName, "Panel") &&
+                (!stricmp(control.fieldName, "ClassInfo") ||
+                 !stricmp(control.fieldName, "ItemInfo"));
+            if ((isDivider || isInfoPanel) && (control.visible || isPreviewDecoration) && control.wide > 0 &&
+                control.tall > 0 && m_decorationCount < (int)(sizeof(m_decorations) / sizeof(m_decorations[0])))
+            {
+                Decoration& decoration = m_decorations[m_decorationCount++];
+                decoration.x = control.xpos;
+                decoration.y = control.ypos;
+                decoration.wide = control.wide;
+                decoration.tall = control.tall;
+                decoration.divider = isDivider;
+            }
+        }
+
+        // Buttons present only in the fallback layout (for example the old
+        // explicit Back button) must not leak into a resource-driven panel.
+        for (int i = resourceButton; i < m_buttonCount; ++i)
+            m_buttons[i]->setVisible(false);
+
+        if (firstPreview)
+            firstPreview->ShowPreview();
+
+        m_resourceLayout = true;
+        return true;
     }
     void paintBackground() override
     {
         int wide = 0, tall = 0;
         getPaintSize(wide, tall);
-        drawSetColor(8, 12, 8, 28);
+        drawSetColor(0, 0, 0, VELARON_PANEL_TRANSPARENCY);
         drawFilledRect(0, 0, wide, tall);
-        drawSetColor(190, 125, 24, 0);
+        drawSetColor(VELARON_ACCENT_R, VELARON_ACCENT_G, VELARON_ACCENT_B, 0);
         drawOutlinedRect(0, 0, wide, tall);
-        drawOutlinedRect(2, 2, wide - 2, tall - 2);
+        if (m_titleBottom > 0 && m_titleBottom < tall)
+            drawFilledRect(1, m_titleBottom, wide - 2, 1);
+
+        for (int i = 0; i < m_decorationCount; ++i)
+        {
+            const Decoration& decoration = m_decorations[i];
+            if (decoration.divider)
+                drawFilledRect(decoration.x, decoration.y, decoration.wide, decoration.tall);
+            else
+                drawOutlinedRect(decoration.x, decoration.y,
+                    decoration.x + decoration.wide, decoration.y + decoration.tall);
+        }
     }
+
+private:
+    struct Decoration
+    {
+        int x, y, wide, tall;
+        bool divider;
+    };
+
+    vgui::Label* m_title;
+    vgui::Button* m_buttons[16];
+    int m_buttonCount;
+    Decoration m_decorations[8];
+    int m_decorationCount;
+    int m_titleBottom;
+    bool m_resourceLayout;
+    int m_resourceXpos;
+    int m_resourceYpos;
+    CPreviewImagePanel* m_preview;
+    bool m_hasPreviewPanel;
 };
 
 class CSelectionPanel final : public CCSMenuPanel
@@ -320,18 +603,23 @@ public:
         {
             AddButton(viewport, "1  TERRORIST FORCES", 72, "jointeam 1\n", 0, 38);
             AddButton(viewport, "2  CT FORCES", 124, "jointeam 2\n", 0, 38);
-            AddButton(viewport, "5  AUTO-SELECT", 176, "jointeam 5\n", 0, 38);
-            AddButton(viewport, "6  SPECTATE", 228, "jointeam 6\n", 0, 38);
-            AddButton(viewport, "0  CANCEL", 286, 0, 0, 38);
+            AddButton(viewport, "3  VIP", 176, "jointeam 3\n", 0, 38);
+            AddButton(viewport, "5  AUTO-SELECT", 228, "jointeam 5\n", 0, 38);
+            AddButton(viewport, "6  SPECTATE", 280, "jointeam 6\n", 0, 38);
+            AddButton(viewport, "0  CANCEL", 332, 0, 0, 38);
+            LoadResource("resource/UI/Teammenu.res");
         }
         else
         {
-            const char* namesT[] = { "1  PHOENIX CONNEXION", "2  L337 KREW", "3  ARCTIC AVENGERS", "4  GUERILLA WARFARE", "5  AUTO-SELECT" };
-            const char* namesCT[] = { "1  SEAL TEAM 6", "2  GSG-9", "3  SAS", "4  GIGN", "5  AUTO-SELECT" };
+            const char* namesT[] = { "1  PHOENIX CONNEXION", "2  L337 KREW", "3  ARCTIC AVENGERS", "4  GUERILLA WARFARE", "5  MILITIA", "6  AUTO-SELECT" };
+            const char* namesCT[] = { "1  SEAL TEAM 6", "2  GSG-9", "3  SAS", "4  GIGN", "5  SPETSNAZ", "6  AUTO-SELECT" };
             const char** names = menuId == CS_MENU_CLASS_T ? namesT : namesCT;
-            static const char* commands[] = { "joinclass 1\n", "joinclass 2\n", "joinclass 3\n", "joinclass 4\n", "joinclass 5\n" };
-            for (int i = 0; i < 5; ++i) AddButton(viewport, names[i], 66 + i * 50, commands[i], 0, 38);
-            AddButton(viewport, "0  CANCEL", 326, 0, 0, 38);
+            static const char* commands[] = { "joinclass 1\n", "joinclass 2\n", "joinclass 3\n", "joinclass 4\n", "joinclass 5\n", "joinclass 6\n" };
+            for (int i = 0; i < 6; ++i) AddButton(viewport, names[i], 66 + i * 44, commands[i], 0, 34);
+            AddButton(viewport, "0  CANCEL", 338, 0, 0, 34);
+            LoadResource(menuId == CS_MENU_CLASS_T
+                ? "resource/UI/Classmenu_TER.res"
+                : "resource/UI/Classmenu_CT.res");
         }
     }
 };
@@ -339,7 +627,7 @@ public:
 class CBuyRootPanel final : public CCSMenuPanel
 {
 public:
-    CBuyRootPanel(CCSViewport* viewport) : CCSMenuPanel("BUY MENU", 436)
+    CBuyRootPanel(CCSViewport* viewport) : CCSMenuPanel("BUY MENU", 448, 640)
     {
         AddButton(viewport, "1  HANDGUNS", 58, 0, CS_MENU_BUY_PISTOL);
         AddButton(viewport, "2  SHOTGUNS", 94, 0, CS_MENU_BUY_SHOTGUN);
@@ -350,20 +638,25 @@ public:
         AddButton(viewport, "7  SECONDARY WEAPON AMMO", 274, "secammo\n", 0);
         AddButton(viewport, "8  EQUIPMENT", 310, 0, CS_MENU_BUY_EQUIPMENT);
         AddButton(viewport, "0  CANCEL", 382, 0, 0);
+        AddButton(viewport, "AUTO-BUY", 58, "autobuy\n", 0);
+        AddButton(viewport, "RE-BUY PREVIOUS", 94, "rebuy\n", 0);
+        LoadResource("resource/UI/MainBuyMenu.res");
     }
 };
 
 class CBuyPanel final : public CCSMenuPanel
 {
 public:
-    CBuyPanel(CCSViewport* viewport, const char* title, const BuyEntry* entries, int count)
+    CBuyPanel(CCSViewport* viewport, const char* title, const BuyEntry* entries,
+        int count, const char* resourcePath)
         : CCSMenuPanel(title, 148 + count * 36)
     {
         for (int i = 0; i < count; ++i)
             AddButton(viewport, entries[i].label, 58 + i * 36, entries[i].command, 0);
         const int bottom = 58 + count * 36 + 8;
-        AddButton(viewport, "9  BACK", bottom, 0, CS_MENU_BUY);
-        AddButton(viewport, "0  CANCEL", bottom + 36, 0, 0);
+        AddButton(viewport, "0  CANCEL", bottom, 0, 0);
+        AddButton(viewport, "9  BACK", bottom + 36, 0, CS_MENU_BUY);
+        LoadResource(resourcePath);
     }
 };
 
@@ -442,16 +735,18 @@ public:
         m_tClassMenu = AddPanel(new CSelectionPanel(this, CS_MENU_CLASS_T));
         m_ctClassMenu = AddPanel(new CSelectionPanel(this, CS_MENU_CLASS_CT));
         m_buyRoot = AddPanel(new CBuyRootPanel(this));
-        m_pistolsT = AddPanel(new CBuyPanel(this, "BUY HANDGUN", g_pistolsT, Count(g_pistolsT)));
-        m_pistolsCT = AddPanel(new CBuyPanel(this, "BUY HANDGUN", g_pistolsCT, Count(g_pistolsCT)));
-        m_shotguns = AddPanel(new CBuyPanel(this, "BUY SHOTGUN", g_shotguns, Count(g_shotguns)));
-        m_riflesT = AddPanel(new CBuyPanel(this, "BUY RIFLE", g_riflesT, Count(g_riflesT)));
-        m_riflesCT = AddPanel(new CBuyPanel(this, "BUY RIFLE", g_riflesCT, Count(g_riflesCT)));
-        m_smgsT = AddPanel(new CBuyPanel(this, "BUY SUB-MACHINE GUN", g_smgsT, Count(g_smgsT)));
-        m_smgsCT = AddPanel(new CBuyPanel(this, "BUY SUB-MACHINE GUN", g_smgsCT, Count(g_smgsCT)));
-        m_machineGuns = AddPanel(new CBuyPanel(this, "BUY MACHINE GUN", g_machineGuns, Count(g_machineGuns)));
-        m_equipmentT = AddPanel(new CBuyPanel(this, "BUY EQUIPMENT", g_equipmentT, Count(g_equipmentT)));
-        m_equipmentCT = AddPanel(new CBuyPanel(this, "BUY EQUIPMENT", g_equipmentCT, Count(g_equipmentCT)));
+        m_pistolsT = AddPanel(new CBuyPanel(this, "BUY HANDGUN", g_pistolsT, Count(g_pistolsT), "resource/UI/BuyPistols_TER.res"));
+        m_pistolsCT = AddPanel(new CBuyPanel(this, "BUY HANDGUN", g_pistolsCT, Count(g_pistolsCT), "resource/UI/BuyPistols_CT.res"));
+        m_shotgunsT = AddPanel(new CBuyPanel(this, "BUY SHOTGUN", g_shotguns, Count(g_shotguns), "resource/UI/BuyShotguns_TER.res"));
+        m_shotgunsCT = AddPanel(new CBuyPanel(this, "BUY SHOTGUN", g_shotguns, Count(g_shotguns), "resource/UI/BuyShotguns_CT.res"));
+        m_riflesT = AddPanel(new CBuyPanel(this, "BUY RIFLE", g_riflesT, Count(g_riflesT), "resource/UI/BuyRifles_TER.res"));
+        m_riflesCT = AddPanel(new CBuyPanel(this, "BUY RIFLE", g_riflesCT, Count(g_riflesCT), "resource/UI/BuyRifles_CT.res"));
+        m_smgsT = AddPanel(new CBuyPanel(this, "BUY SUB-MACHINE GUN", g_smgsT, Count(g_smgsT), "resource/UI/BuySubMachineguns_TER.res"));
+        m_smgsCT = AddPanel(new CBuyPanel(this, "BUY SUB-MACHINE GUN", g_smgsCT, Count(g_smgsCT), "resource/UI/BuySubMachineguns_CT.res"));
+        m_machineGunsT = AddPanel(new CBuyPanel(this, "BUY MACHINE GUN", g_machineGuns, Count(g_machineGuns), "resource/UI/BuyMachineguns_TER.res"));
+        m_machineGunsCT = AddPanel(new CBuyPanel(this, "BUY MACHINE GUN", g_machineGuns, Count(g_machineGuns), "resource/UI/BuyMachineguns_CT.res"));
+        m_equipmentT = AddPanel(new CBuyPanel(this, "BUY EQUIPMENT", g_equipmentT, Count(g_equipmentT), "resource/UI/BuyEquipment_TER.res"));
+        m_equipmentCT = AddPanel(new CBuyPanel(this, "BUY EQUIPMENT", g_equipmentCT, Count(g_equipmentCT), "resource/UI/BuyEquipment_CT.res"));
         m_commandMenu = static_cast<CCommandMenuPanel*>(AddPanel(new CCommandMenuPanel(this)));
     }
 
@@ -532,11 +827,11 @@ public:
         }
         if (m_currentMenu == CS_MENU_TEAM)
         {
-            switch (keynum) { case '1': PerformAction("jointeam 1\n", 0); return 1; case '2': PerformAction("jointeam 2\n", 0); return 1; case '5': PerformAction("jointeam 5\n", 0); return 1; case '6': PerformAction("jointeam 6\n", 0); return 1; case '0': PerformAction(0, 0); return 1; default: return 0; }
+            switch (keynum) { case '1': PerformAction("jointeam 1\n", 0); return 1; case '2': PerformAction("jointeam 2\n", 0); return 1; case '3': PerformAction("jointeam 3\n", 0); return 1; case '5': PerformAction("jointeam 5\n", 0); return 1; case '6': PerformAction("jointeam 6\n", 0); return 1; case '0': PerformAction(0, 0); return 1; default: return 0; }
         }
         if (m_currentMenu == CS_MENU_CLASS_T || m_currentMenu == CS_MENU_CLASS_CT)
         {
-            if (keynum >= '1' && keynum <= '5') { static const char* c[] = { "joinclass 1\n", "joinclass 2\n", "joinclass 3\n", "joinclass 4\n", "joinclass 5\n" }; PerformAction(c[keynum - '1'], 0); return 1; }
+            if (keynum >= '1' && keynum <= '6') { static const char* c[] = { "joinclass 1\n", "joinclass 2\n", "joinclass 3\n", "joinclass 4\n", "joinclass 5\n", "joinclass 6\n" }; PerformAction(c[keynum - '1'], 0); return 1; }
             if (keynum == '0') { PerformAction(0, 0); return 1; }
             return 0;
         }
@@ -576,10 +871,10 @@ private:
         {
         case CS_MENU_TEAM: return m_teamMenu; case CS_MENU_CLASS_T: return m_tClassMenu; case CS_MENU_CLASS_CT: return m_ctClassMenu; case CS_MENU_BUY: return m_buyRoot;
         case CS_MENU_BUY_PISTOL: entries = m_team == CS_TEAM_CT ? g_pistolsCT : g_pistolsT; count = m_team == CS_TEAM_CT ? Count(g_pistolsCT) : Count(g_pistolsT); return m_team == CS_TEAM_CT ? m_pistolsCT : m_pistolsT;
-        case CS_MENU_BUY_SHOTGUN: entries = g_shotguns; count = Count(g_shotguns); return m_shotguns;
+        case CS_MENU_BUY_SHOTGUN: entries = g_shotguns; count = Count(g_shotguns); return m_team == CS_TEAM_CT ? m_shotgunsCT : m_shotgunsT;
         case CS_MENU_BUY_RIFLE: entries = m_team == CS_TEAM_CT ? g_riflesCT : g_riflesT; count = m_team == CS_TEAM_CT ? Count(g_riflesCT) : Count(g_riflesT); return m_team == CS_TEAM_CT ? m_riflesCT : m_riflesT;
         case CS_MENU_BUY_SMG: entries = m_team == CS_TEAM_CT ? g_smgsCT : g_smgsT; count = m_team == CS_TEAM_CT ? Count(g_smgsCT) : Count(g_smgsT); return m_team == CS_TEAM_CT ? m_smgsCT : m_smgsT;
-        case CS_MENU_BUY_MACHINEGUN: entries = g_machineGuns; count = Count(g_machineGuns); return m_machineGuns;
+        case CS_MENU_BUY_MACHINEGUN: entries = g_machineGuns; count = Count(g_machineGuns); return m_team == CS_TEAM_CT ? m_machineGunsCT : m_machineGunsT;
         case CS_MENU_BUY_EQUIPMENT: entries = m_team == CS_TEAM_CT ? g_equipmentCT : g_equipmentT; count = m_team == CS_TEAM_CT ? Count(g_equipmentCT) : Count(g_equipmentT); return m_team == CS_TEAM_CT ? m_equipmentCT : m_equipmentT;
         default: return 0;
         }
@@ -590,7 +885,20 @@ private:
         {
             int wide = 0, tall = 0; m_panels[i]->getSize(wide, tall);
             if (m_panels[i] == m_commandMenu) { int y = (m_height - tall) / 3; if (y < 48) y = 48; m_panels[i]->setPos(20, y); }
-            else m_panels[i]->setPos((m_width - wide) / 2, (m_height - tall) / 2);
+            else
+            {
+                int resourceX = 0, resourceY = 0;
+                if (m_panels[i]->GetResourcePosition(resourceX, resourceY))
+                {
+                    int canvasX = (m_width - 640) / 2;
+                    int canvasY = (m_height - 480) / 2;
+                    if (canvasX < 0) canvasX = 0;
+                    if (canvasY < 0) canvasY = 0;
+                    m_panels[i]->setPos(canvasX + resourceX, canvasY + resourceY);
+                }
+                else
+                    m_panels[i]->setPos((m_width - wide) / 2, (m_height - tall) / 2);
+            }
         }
     }
     void UpdateCursor(bool visible)
@@ -603,10 +911,10 @@ private:
     int m_width, m_height, m_currentMenu, m_team;
     const BuyEntry* m_currentEntries;
     int m_currentEntryCount, m_commandNode, m_commandPage;
-    CCSMenuPanel* m_panels[16]; int m_panelCount;
+    CCSMenuPanel* m_panels[24]; int m_panelCount;
     CCSMenuPanel *m_teamMenu, *m_tClassMenu, *m_ctClassMenu, *m_buyRoot;
-    CCSMenuPanel *m_pistolsT, *m_pistolsCT, *m_shotguns, *m_riflesT, *m_riflesCT;
-    CCSMenuPanel *m_smgsT, *m_smgsCT, *m_machineGuns, *m_equipmentT, *m_equipmentCT;
+    CCSMenuPanel *m_pistolsT, *m_pistolsCT, *m_shotgunsT, *m_shotgunsCT, *m_riflesT, *m_riflesCT;
+    CCSMenuPanel *m_smgsT, *m_smgsCT, *m_machineGunsT, *m_machineGunsCT, *m_equipmentT, *m_equipmentCT;
     CCommandMenuPanel* m_commandMenu;
 };
 

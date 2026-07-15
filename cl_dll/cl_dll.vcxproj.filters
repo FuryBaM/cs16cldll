@@ -189,6 +189,9 @@
     <ClCompile Include="..\game_shared\voice_banmgr.cpp">
       <Filter>Исходные файлы\game_shared</Filter>
     </ClCompile>
+    <ClCompile Include="..\game_shared\vgui_loadtga.cpp">
+      <Filter>Исходные файлы\game_shared</Filter>
+    </ClCompile>
     <ClCompile Include="..\public\interface.cpp">
       <Filter>Исходные файлы\public</Filter>
     </ClCompile>
