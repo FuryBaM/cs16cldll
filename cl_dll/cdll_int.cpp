@@ -43,9 +43,16 @@ IParticleMan* g_pParticleMan = NULL;
 #if defined(_WIN32) && defined(_CS16CLIENT_STARTUP_TRACE)
 static bool g_cs16RuntimeTrace = false;
 static PVOID g_cs16ExceptionHandler = NULL;
+static LONG g_cs16TraceSequence = 0;
 
 void CS16_StartupTrace(const char* stage, bool reset)
 {
+	if (!stage)
+		return;
+
+	if (reset)
+		InterlockedExchange(&g_cs16TraceSequence, 0);
+
 	char path[MAX_PATH];
 	const char filename[] = "cs16_goldsrc_startup.log";
 	const DWORD length = GetTempPathA(sizeof(path), path);
@@ -59,8 +66,14 @@ void CS16_StartupTrace(const char* stage, bool reset)
 		return;
 
 	SetFilePointer(file, 0, NULL, FILE_END);
+	char line[768];
+	const LONG sequence = InterlockedIncrement(&g_cs16TraceSequence);
+	_snprintf_s(line, sizeof(line), _TRUNCATE, "[%06ld ms=%lu tid=%lu] %s",
+		(long)sequence, (unsigned long)GetTickCount(),
+		(unsigned long)GetCurrentThreadId(), stage);
+
 	DWORD written = 0;
-	WriteFile(file, stage, (DWORD)strlen(stage), &written, NULL);
+	WriteFile(file, line, (DWORD)strlen(line), &written, NULL);
 	WriteFile(file, "\r\n", 2, &written, NULL);
 	CloseHandle(file);
 }
@@ -134,10 +147,17 @@ static void CS16_InstallExceptionTrace(void)
 	if (!g_cs16ExceptionHandler)
 		g_cs16ExceptionHandler = AddVectoredExceptionHandler(1, CS16_ExceptionTrace);
 }
+
+void CS16_RemoveExceptionTrace(void)
+{
+	if (g_cs16ExceptionHandler && RemoveVectoredExceptionHandler(g_cs16ExceptionHandler))
+		g_cs16ExceptionHandler = NULL;
+}
 #else
 void CS16_StartupTrace(const char*, bool) {}
 void CS16_SetRuntimeTrace(bool) {}
 bool CS16_RuntimeTraceEnabled(void) { return false; }
+void CS16_RemoveExceptionTrace(void) {}
 #endif
 
 void InitInput(void);
@@ -428,7 +448,9 @@ void CL_DLLEXPORT HUD_Frame(double time)
 		gEngfuncs.Cvar_SetValue("_vgui_menus", wantedVguiMenus);
 	}
 
-	gEngfuncs.VGui_ViewportPaintBackground(HUD_GetRect());
+	// The custom viewport paints its own menu panels. Asking GoldSrc to paint
+	// the legacy viewport background every frame covers the 3D scene with an
+	// opaque black layer even after the menu has been dismissed.
 #endif
 
 	GetClientVoiceMgr()->Frame(time);

@@ -661,11 +661,18 @@ extern "C" void CS16VGUI_ClientCommand(const char* command)
 	if (command && !strncmp(command, "joinclass ", 10))
 	{
 		CS16_SetRuntimeTrace(true);
-		CS16_StartupTrace("VGUI1: joinclass command");
+		CS16_StartupTrace("VGUI1: joinclass command enter");
+	}
+	else if (CS16_RuntimeTraceEnabled())
+	{
+		CS16_StartupTrace("VGUI1: client command enter");
 	}
 
     if (command && command[0] && gEngfuncs.pfnClientCmd)
         gEngfuncs.pfnClientCmd((char*)command);
+
+	if (CS16_RuntimeTraceEnabled())
+		CS16_StartupTrace("VGUI1: client command returned");
 }
 
 extern "C" void CS16VGUI_SetMouseVisible(int visible)
@@ -693,6 +700,12 @@ extern "C" void CS16VGUI_Trace(const char* stage)
 {
     if (stage)
         CS16_StartupTrace(stage);
+}
+
+extern "C" void CS16VGUI_PaintBackground(int extents[4])
+{
+    if (extents && gEngfuncs.VGui_ViewportPaintBackground)
+        gEngfuncs.VGui_ViewportPaintBackground(extents);
 }
 
 extern "C" int CS16VGUI_Startup(int width, int height)
@@ -728,6 +741,7 @@ extern "C" int CS16VGUI_Startup(int width, int height)
 
 extern "C" void CS16VGUI_Shutdown(void)
 {
+	CS16_StartupTrace("VGUI1: shutdown enter");
 #if defined(_CS16CLIENT_ENABLE_VGUI1)
     if (g_vguiInitialized)
         CS16VGUI_ImplShutdown();
@@ -735,6 +749,7 @@ extern "C" void CS16VGUI_Shutdown(void)
     g_vguiInitialized = false;
     g_vguiDisabledForSession = false;
     CS16VGUI_SetMouseVisible(0);
+	CS16_StartupTrace("VGUI1: shutdown complete");
 }
 
 extern "C" void CS16VGUI_ResetSession(void)
@@ -806,7 +821,11 @@ extern "C" void CS16VGUI_HideMenu(void)
 {
 #if defined(_CS16CLIENT_ENABLE_VGUI1)
     if (g_vguiInitialized)
+	{
+		CS16_StartupTrace("VGUI1: hide menu enter");
         CS16VGUI_ImplHideMenu();
+		CS16_StartupTrace("VGUI1: hide menu complete");
+	}
 #endif
 }
 

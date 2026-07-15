@@ -29,6 +29,7 @@ extern cvar_t *hud_textmode;
 void CS16_StartupTrace(const char *stage, bool reset = false);
 void CS16_SetRuntimeTrace(bool enabled);
 bool CS16_RuntimeTraceEnabled(void);
+void CS16_RemoveExceptionTrace(void);
 
 #ifdef _MSC_VER
 #pragma warning(disable : 4244) // 'argument': conversion from 'float' to 'int', possible loss of data

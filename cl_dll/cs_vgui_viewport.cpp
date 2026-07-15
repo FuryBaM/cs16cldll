@@ -34,6 +34,7 @@ void __cdecl operator delete[](void* memory, unsigned int) noexcept { free(memor
 extern "C" void CS16VGUI_ClientCommand(const char* command);
 extern "C" void CS16VGUI_SetMouseVisible(int visible);
 extern "C" void CS16VGUI_Trace(const char* stage);
+extern "C" void CS16VGUI_PaintBackground(int extents[4]);
 extern "C" int CS16VGUI_CommandMenuPrepare(void);
 extern "C" int CS16VGUI_CommandMenuGetCount(int node);
 extern "C" int CS16VGUI_CommandMenuGetParent(int node);
@@ -730,7 +731,10 @@ public:
           m_currentEntryCount(0), m_commandNode(0), m_commandPage(0),
           m_panelCount(0), m_commandMenu(0)
     {
-        setPaintBackgroundEnabled(false);
+        // GoldSrc's VGUI1 surface starts as an opaque black canvas. While a
+        // fullscreen viewport menu is visible, ask the engine to paint the
+        // current 3D view into that canvas before painting the menu panels.
+        setPaintBackgroundEnabled(true);
         m_teamMenu = AddPanel(new CSelectionPanel(this, CS_MENU_TEAM));
         m_tClassMenu = AddPanel(new CSelectionPanel(this, CS_MENU_CLASS_T));
         m_ctClassMenu = AddPanel(new CSelectionPanel(this, CS_MENU_CLASS_CT));
@@ -753,8 +757,8 @@ public:
     void Attach(vgui::Panel* root, int width, int height)
     {
         m_width = width; m_height = height;
-        setBounds(0, 0, width, height); setParent(root); setVisible(true);
-        LayoutMenus(); HideMenu();
+        setBounds(0, 0, width, height); setParent(root);
+        LayoutMenus(); HideMenu(); setVisible(true);
     }
     void SetTeam(int team) { if (team == CS_TEAM_T || team == CS_TEAM_CT) m_team = team; }
 
@@ -763,7 +767,7 @@ public:
         const BuyEntry* entries = 0; int count = 0;
         CCSMenuPanel* panel = PanelForMenu(menuId, entries, count);
         if (!panel) return 0;
-        HideAllPanels(); panel->setVisible(true); panel->requestFocus();
+        HideAllPanels(); setVisible(true); panel->setVisible(true); panel->requestFocus();
         m_currentMenu = menuId; m_currentEntries = entries; m_currentEntryCount = count;
         UpdateCursor(true); repaint(); return 1;
     }
@@ -777,14 +781,28 @@ public:
     void ReleaseCommandMenu() { if (m_currentMenu == CS_MENU_COMMAND) HideMenu(); }
     void HideMenu()
     {
+        CS16VGUI_Trace("VGUI1: viewport hide panels enter");
+        // Keep the root viewport alive: GoldSrc renders the normal 3D frame
+        // through this panel's paintBackground(), even when no menu is open.
         HideAllPanels(); m_currentMenu = 0; m_currentEntries = 0;
         m_currentEntryCount = 0; m_commandNode = 0; m_commandPage = 0;
         UpdateCursor(false);
+        CS16VGUI_Trace("VGUI1: viewport hide panels complete");
+    }
+    void Shutdown()
+    {
+        HideMenu();
+        setVisible(false);
     }
     void PerformAction(const char* command, int targetMenu)
     {
         if (targetMenu) { ShowMenu(targetMenu); return; }
-        HideMenu(); if (command) CS16VGUI_ClientCommand(command);
+        if (command && !strncmp(command, "joinclass ", 10))
+            CS16VGUI_Trace("VGUI1: class action enter");
+        HideMenu();
+        if (command) CS16VGUI_ClientCommand(command);
+        if (command && !strncmp(command, "joinclass ", 10))
+            CS16VGUI_Trace("VGUI1: class action complete");
     }
 
     void PerformCommandSlot(int slot)
@@ -849,6 +867,24 @@ public:
         return 0;
     }
 
+protected:
+    void paintBackground() override
+    {
+        static bool tracedFirstPaint = false;
+        if (!tracedFirstPaint)
+            CS16VGUI_Trace("VGUI1: viewport background paint enter");
+
+        int extents[4] = { 0, 0, 0, 0 };
+        getAbsExtents(extents[0], extents[1], extents[2], extents[3]);
+        CS16VGUI_PaintBackground(extents);
+
+        if (!tracedFirstPaint)
+        {
+            CS16VGUI_Trace("VGUI1: viewport background paint complete");
+            tracedFirstPaint = true;
+        }
+    }
+
 private:
     template <int N> static int Count(const BuyEntry (&)[N]) { return N; }
     CCSMenuPanel* AddPanel(CCSMenuPanel* panel)
@@ -861,7 +897,7 @@ private:
     int ShowCommandNode(int node, int page)
     {
         if (!m_commandMenu || !m_commandMenu->Refresh(node, page)) return 0;
-        HideAllPanels(); LayoutMenus(); m_commandMenu->setVisible(true); m_commandMenu->requestFocus();
+        HideAllPanels(); LayoutMenus(); setVisible(true); m_commandMenu->setVisible(true); m_commandMenu->requestFocus();
         m_currentMenu = CS_MENU_COMMAND; m_currentEntries = 0; m_currentEntryCount = 0;
         m_commandNode = node; m_commandPage = page; UpdateCursor(true); repaint(); return 1;
     }
@@ -931,7 +967,11 @@ extern "C" int CS16VGUI_ImplStartup(void* rootPanel, int width, int height)
 }
 extern "C" void CS16VGUI_ImplShutdown(void)
 {
-    if (!g_viewport) return; g_viewport->HideMenu(); g_viewport->setVisible(false); g_viewport->setParent(0);
+    // GoldSrc can tear down the VGUI root before HUD_Shutdown. Detaching from
+    // that already-destroying parent calls into an invalid vgui::Panel.
+    CS16VGUI_Trace("VGUI1: viewport shutdown enter");
+    if (g_viewport) g_viewport->Shutdown();
+    CS16VGUI_Trace("VGUI1: viewport shutdown complete");
 }
 extern "C" void CS16VGUI_ImplSetTeam(int team) { if (g_viewport) g_viewport->SetTeam(team); }
 extern "C" int CS16VGUI_ImplShowMenu(int menuId) { return g_viewport ? g_viewport->ShowMenu(menuId) : 0; }

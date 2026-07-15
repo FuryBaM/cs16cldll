@@ -92,7 +92,7 @@ $requiredExports = @(
 $exportText = (& $dumpbin /nologo /exports $dll) -join "`n"
 $actualExports = [regex]::Matches(
     $exportText,
-    '(?m)^\s+\d+\s+[0-9A-F]+\s+[0-9A-F]+\s+(\S+)\s*$'
+    '(?m)^\s+\d+\s+[0-9A-F]+\s+[0-9A-F]+\s+(\S+)(?:\s+=.*)?$'
 ) | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
 
 $missing = $requiredExports | Where-Object { $_ -notin $actualExports }

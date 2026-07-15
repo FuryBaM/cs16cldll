@@ -1028,6 +1028,8 @@ void CL_DLLEXPORT HUD_Shutdown( void )
 #endif
 	
 	CL_UnloadParticleMan();
+	CS16_StartupTrace("HUD_Shutdown: complete");
+	CS16_RemoveExceptionTrace();
 }
 
 void Input_Shutdown(void)
