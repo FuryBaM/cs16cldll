@@ -1,0 +1,249 @@
+diff --git a/cl_dll/cs_vgui_viewport.cpp b/cl_dll/cs_vgui_viewport.cpp
+index 64d2fe1..r14src00 100644
+--- a/cl_dll/cs_vgui_viewport.cpp
++++ b/cl_dll/cs_vgui_viewport.cpp
+@@
+ #include <VGUI_Scheme.h>
++#include <windows.h>
+@@
+-    MAX_COMMAND_MENU_BUTTONS = 20
++    MAX_COMMAND_MENU_BUTTONS = 10,
++    COMMAND_MENU_PAGE_SIZE = 8
+ };
++
++static int g_nextCommandTexture = 4100;
++
++static int Utf8ToWide(const char* text, wchar_t* output, int capacity)
++{
++    if (!output || capacity <= 0)
++        return 0;
++    output[0] = 0;
++    if (!text)
++        return 0;
++
++    int result = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
++        text, -1, output, capacity);
++    if (result <= 0)
++        result = MultiByteToWideChar(1251, 0, text, -1, output, capacity);
++    output[capacity - 1] = 0;
++    return result;
++}
++
++class CUnicodeCommandButton final : public CCSMenuButton
++{
++public:
++    CUnicodeCommandButton(int x, int y, int wide, int tall)
++        : CCSMenuButton("", x, y, wide, tall), m_texture(++g_nextCommandTexture),
++          m_textureWidth(0), m_textureHeight(0), m_hasTexture(false)
++    {
++        m_text[0] = 0;
++    }
++
++    void SetUtf8Text(const char* text)
++    {
++        Utf8ToWide(text, m_text, (int)(sizeof(m_text) / sizeof(m_text[0])));
++        BuildTexture();
++        repaint();
++    }
++
++protected:
++    void paint() override
++    {
++        if (!m_hasTexture)
++            return;
++        drawSetColor(255, 255, 255, 0);
++        drawSetTexture(m_texture);
++        drawTexturedRect(10, 3, 10 + m_textureWidth, 3 + m_textureHeight);
++    }
++
++private:
++    void BuildTexture()
++    {
++        int wide = 0, tall = 0;
++        getPaintSize(wide, tall);
++        if (wide <= 0 || tall <= 0)
++            return;
++
++        HDC dc = CreateCompatibleDC(NULL);
++        if (!dc)
++            return;
++
++        BITMAPINFO info = {};
++        info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
++        info.bmiHeader.biWidth = wide;
++        info.bmiHeader.biHeight = -tall;
++        info.bmiHeader.biPlanes = 1;
++        info.bmiHeader.biBitCount = 32;
++        info.bmiHeader.biCompression = BI_RGB;
++
++        void* pixels = NULL;
++        HBITMAP bitmap = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &pixels, NULL, 0);
++        if (!bitmap || !pixels)
++        {
++            DeleteDC(dc);
++            return;
++        }
++
++        HGDIOBJ oldBitmap = SelectObject(dc, bitmap);
++        HFONT font = CreateFontW(-16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
++            RUSSIAN_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
++            ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Tahoma");
++        HGDIOBJ oldFont = font ? SelectObject(dc, font) : NULL;
++        SetBkMode(dc, TRANSPARENT);
++        SetTextColor(dc, RGB(255, 255, 255));
++
++        RECT rect = { 0, 0, wide, tall };
++        DrawTextW(dc, m_text, -1, &rect, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
++
++        unsigned char* rgba = new unsigned char[wide * tall * 4];
++        unsigned char* bgra = static_cast<unsigned char*>(pixels);
++        for (int i = 0; i < wide * tall; ++i)
++        {
++            const unsigned char alpha = bgra[i * 4 + 2];
++            rgba[i * 4 + 0] = 255;
++            rgba[i * 4 + 1] = 255;
++            rgba[i * 4 + 2] = 255;
++            rgba[i * 4 + 3] = alpha;
++        }
++        drawSetTextureRGBA(m_texture, reinterpret_cast<const char*>(rgba), wide, tall);
++        delete[] rgba;
++
++        if (oldFont) SelectObject(dc, oldFont);
++        if (font) DeleteObject(font);
++        SelectObject(dc, oldBitmap);
++        DeleteObject(bitmap);
++        DeleteDC(dc);
++
++        m_textureWidth = wide;
++        m_textureHeight = tall;
++        m_hasTexture = true;
++    }
++
++    wchar_t m_text[256];
++    int m_texture;
++    int m_textureWidth;
++    int m_textureHeight;
++    bool m_hasTexture;
++};
+@@
+ class CCommandMenuPanel final : public CCSMenuPanel
+ {
+ public:
+@@
+-            CCSMenuButton* button = new CCSMenuButton("", 20, 48 + i * 30, 320, 27);
++            CUnicodeCommandButton* button = new CUnicodeCommandButton(20, 48 + i * 30, 320, 27);
+@@
+-    bool Refresh(int node)
++    bool Refresh(int node, int page)
+     {
+@@
+-        int rows = count;
+-        if (rows > MAX_COMMAND_MENU_BUTTONS)
+-            rows = MAX_COMMAND_MENU_BUTTONS;
++        const int pageCount = count > 0 ? (count + COMMAND_MENU_PAGE_SIZE - 1) / COMMAND_MENU_PAGE_SIZE : 1;
++        if (page < 0) page = 0;
++        if (page >= pageCount) page = pageCount - 1;
++        const int first = page * COMMAND_MENU_PAGE_SIZE;
++        int rows = count - first;
++        if (rows > COMMAND_MENU_PAGE_SIZE) rows = COMMAND_MENU_PAGE_SIZE;
+@@
+-            if (!CS16VGUI_CommandMenuGetItem(node, i, &display, 0, 0, 0))
++            if (!CS16VGUI_CommandMenuGetItem(node, first + i, &display, 0, 0, 0))
+@@
+-            m_buttons[i]->setText("%s", display ? display : "");
++            char numbered[320];
++            _snprintf(numbered, sizeof(numbered), "%d  %s", i + 1, display ? display : "");
++            numbered[sizeof(numbered) - 1] = 0;
++            m_buttons[i]->SetUtf8Text(numbered);
+@@
+-        if (parent >= 0 && rows < MAX_COMMAND_MENU_BUTTONS)
++        if (page + 1 < pageCount)
+         {
+-            m_buttons[rows]->setText("%s", "0  BACK");
+-            m_buttons[rows]->setVisible(true);
+-            ++rows;
++            m_buttons[8]->SetUtf8Text("9  NEXT");
++            m_buttons[8]->setVisible(true);
+         }
++        else m_buttons[8]->setVisible(false);
++
++        m_buttons[9]->SetUtf8Text(parent >= 0 || page > 0 ? "0  BACK" : "0  CLOSE");
++        m_buttons[9]->setVisible(true);
++        rows = 10;
+@@
+ private:
+-    CCSMenuButton* m_buttons[MAX_COMMAND_MENU_BUTTONS];
++    CUnicodeCommandButton* m_buttons[MAX_COMMAND_MENU_BUTTONS];
+ };
+@@
+-          m_currentEntries(0), m_currentEntryCount(0), m_commandNode(0), m_panelCount(0),
++          m_currentEntries(0), m_currentEntryCount(0), m_commandNode(0), m_commandPage(0), m_panelCount(0),
+@@
+-        return ShowCommandNode(0);
++        return ShowCommandNode(0, 0);
+@@
+         m_commandNode = 0;
++        m_commandPage = 0;
+@@
+-        const int count = CS16VGUI_CommandMenuGetCount(m_commandNode);
++        const int count = CS16VGUI_CommandMenuGetCount(m_commandNode);
++        const int first = m_commandPage * COMMAND_MENU_PAGE_SIZE;
+         const int parent = CS16VGUI_CommandMenuGetParent(m_commandNode);
+-        if (slot >= count)
++        if (slot == 8)
+         {
+-            if (parent >= 0)
+-                ShowCommandNode(parent);
++            if (first + COMMAND_MENU_PAGE_SIZE < count)
++                ShowCommandNode(m_commandNode, m_commandPage + 1);
+             return;
+         }
++        if (slot == 9)
++        {
++            if (m_commandPage > 0) ShowCommandNode(m_commandNode, m_commandPage - 1);
++            else if (parent >= 0) ShowCommandNode(parent, 0);
++            else HideMenu();
++            return;
++        }
++
++        const int visibleIndex = first + slot;
++        if (slot >= COMMAND_MENU_PAGE_SIZE || visibleIndex >= count) return;
+@@
+-        if (!CS16VGUI_CommandMenuGetItem(m_commandNode, slot, 0,
++        if (!CS16VGUI_CommandMenuGetItem(m_commandNode, visibleIndex, 0,
+@@
+-            ShowCommandNode(childNode);
++            ShowCommandNode(childNode, 0);
+@@
+-            const int count = CS16VGUI_CommandMenuGetCount(m_commandNode);
+-            for (int i = 0; i < count; ++i)
+-            {
+-                int boundKey = 0;
+-                if (CS16VGUI_CommandMenuGetItem(m_commandNode, i, 0, 0, 0, &boundKey) &&
+-                    keynum == boundKey)
+-                {
+-                    PerformCommandSlot(i);
+-                    return 1;
+-                }
+-            }
+-
+-            if (keynum == '0' && CS16VGUI_CommandMenuGetParent(m_commandNode) >= 0)
+-            {
+-                ShowCommandNode(CS16VGUI_CommandMenuGetParent(m_commandNode));
+-                return 1;
+-            }
++            if (keynum >= '1' && keynum <= '8') { PerformCommandSlot(keynum - '1'); return 1; }
++            if (keynum == '9') { PerformCommandSlot(8); return 1; }
++            if (keynum == '0') { PerformCommandSlot(9); return 1; }
+@@
+-    int ShowCommandNode(int node)
++    int ShowCommandNode(int node, int page)
+     {
+-        if (!m_commandMenu || !m_commandMenu->Refresh(node))
++        if (!m_commandMenu || !m_commandMenu->Refresh(node, page))
+@@
+         m_commandNode = node;
++        m_commandPage = page;
+@@
+     int m_commandNode;
++    int m_commandPage;
