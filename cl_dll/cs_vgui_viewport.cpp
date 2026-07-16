@@ -388,8 +388,10 @@ static int Utf8ToWide(const char* text, wchar_t* output, int capacity)
 class CUnicodeCommandButton final : public CCSMenuButton
 {
 public:
-    CUnicodeCommandButton(int x, int y, int wide, int tall)
-        : CCSMenuButton("", x, y, wide, tall), m_texture(++g_nextCommandTexture),
+    CUnicodeCommandButton(CCSViewport* viewport, int depth, int slot,
+        int x, int y, int wide, int tall)
+        : CCSMenuButton("", x, y, wide, tall), m_viewport(viewport),
+          m_depth(depth), m_slot(slot), m_texture(++g_nextCommandTexture),
           m_textureWidth(0), m_textureHeight(0), m_hasTexture(false),
           m_opensSubmenu(false)
     {
@@ -405,12 +407,7 @@ public:
 
     void SetOpensSubmenu(bool opens) { m_opensSubmenu = opens; }
 
-    void cursorEntered(vgui::Panel* panel) override
-    {
-        CCSMenuButton::cursorEntered(panel);
-        if (m_opensSubmenu)
-            doClick();
-    }
+    void cursorEntered(vgui::Panel* panel) override;
 
 protected:
     void paint() override
@@ -432,6 +429,9 @@ protected:
     }
 
 private:
+    CCSViewport* m_viewport;
+    int m_depth;
+    int m_slot;
     void BuildTexture()
     {
         int wide = 0, tall = 0;
@@ -793,7 +793,8 @@ public:
         for (int i = 0; i < MAX_COMMAND_MENU_BUTTONS; ++i)
         {
             CUnicodeCommandButton* button = new CUnicodeCommandButton(
-                0, LayoutValue(i * 27), LayoutValue(140), LayoutValue(28));
+                viewport, depth, i, 0, LayoutValue(i * 27),
+                LayoutValue(140), LayoutValue(28));
             button->setParent(this);
             button->addActionSignal(new CCommandSlotSignal(viewport, depth, i));
             button->setVisible(false);
@@ -806,6 +807,7 @@ public:
         (void)page;
         CS16VGUI_Trace("VGUI1: command menu refresh enter");
         const int count = CS16VGUI_CommandMenuGetCount(node);
+        SetSelectedSlot(-1);
         int rows = count;
         if (rows > MAX_COMMAND_MENU_BUTTONS)
             rows = MAX_COMMAND_MENU_BUTTONS;
@@ -836,6 +838,12 @@ public:
             ? visibleRows * 27 + 1 : 28));
         CS16VGUI_Trace("VGUI1: command menu refresh complete");
         return count > 0 || CS16VGUI_CommandMenuGetParent(node) >= 0;
+    }
+    void SetSelectedSlot(int selected)
+    {
+        for (int i = 0; i < MAX_COMMAND_MENU_BUTTONS; ++i)
+            m_buttons[i]->setSelected(i == selected);
+        repaint();
     }
 private:
     int m_depth;
@@ -943,11 +951,27 @@ public:
         if (!CS16VGUI_CommandMenuGetItem(node, slot, 0, &itemIndex, &childNode, 0)) return;
         if (childNode >= 0)
         {
+            m_commandMenus[depth]->SetSelectedSlot(slot);
             if (depth + 1 < MAX_COMMAND_MENU_DEPTH)
                 ShowCommandNode(childNode, depth + 1, slot, false);
             return;
         }
         HideMenu(); CS16VGUI_CommandMenuExecute(itemIndex);
+    }
+
+    void HoverCommandSlot(int depth, int slot, bool opensSubmenu)
+    {
+        if (m_currentMenu != CS_MENU_COMMAND || depth < 0 ||
+            depth > m_commandDepth || slot < 0)
+            return;
+        m_commandMenus[depth]->SetSelectedSlot(slot);
+        for (int i = depth + 1; i < MAX_COMMAND_MENU_DEPTH; ++i)
+            m_commandMenus[i]->setVisible(false);
+        m_commandDepth = depth;
+        m_commandNode = m_commandNodes[depth];
+        if (opensSubmenu)
+            PerformCommandSlot(depth, slot);
+        repaint();
     }
 
     int KeyInput(int down, int keynum)
@@ -1124,6 +1148,12 @@ private:
 
 void CMenuActionSignal::actionPerformed(vgui::Panel*) { m_viewport->PerformAction(m_command, m_targetMenu); }
 void CCommandSlotSignal::actionPerformed(vgui::Panel*) { m_viewport->PerformCommandSlot(m_depth, m_slot); }
+void CUnicodeCommandButton::cursorEntered(vgui::Panel* panel)
+{
+    CCSMenuButton::cursorEntered(panel);
+    if (m_viewport)
+        m_viewport->HoverCommandSlot(m_depth, m_slot, m_opensSubmenu);
+}
 CCSViewport* g_viewport = 0;
 }
 

@@ -130,7 +130,7 @@ public:
         : m_ivgui(NULL), m_panel(NULL), m_surface(NULL), m_input(NULL),
           m_vpanel(0), m_visible(false), m_legacyCursorVisible(false),
           m_currentMenu(0), m_team(CS_TEAM_T),
-          m_entryCount(0), m_hoveredEntry(-1),
+          m_entryCount(0), m_hoveredEntry(-1), m_selectedEntry(-1),
           m_font(vgui2::INVALID_FONT), m_titleFont(vgui2::INVALID_FONT),
           m_infoFont(vgui2::INVALID_FONT),
           m_previewTexture(0), m_loadedPreviewEntry(-1),
@@ -317,6 +317,7 @@ public:
         m_currentMenu = 0;
         m_visible = false;
         m_hoveredEntry = -1;
+        m_selectedEntry = -1;
         if (m_vpanel && m_panel && !m_legacyCursorVisible)
             m_panel->SetVisible(m_vpanel, false);
         CS16VGUI_SetMouseVisible(0);
@@ -437,6 +438,14 @@ public:
                     y0 + (y1 - y0 - m_surface->GetFontTall(m_font)) / 2,
                     entry.label, m_font, 255, 220, 120, 255);
             }
+            else if (i == m_selectedEntry)
+            {
+                m_surface->DrawSetColor(120, 65, 0, 115);
+                m_surface->DrawFilledRect(x0, y0, x1, y1);
+                DrawText(ScaleX(left + entry.x + 6),
+                    y0 + (y1 - y0 - m_surface->GetFontTall(m_font)) / 2,
+                    entry.label, m_font, 255, 190, 70, 255);
+            }
             else
             {
                 DrawText(ScaleX(left + entry.x + 6),
@@ -444,7 +453,8 @@ public:
                     entry.label, m_font, entry.enabled ? 255 : 140,
                     entry.enabled ? 165 : 100, entry.enabled ? 35 : 30, 255);
             }
-            m_surface->DrawSetColor(188, 112, 0, i == m_hoveredEntry ? 230 : 128);
+            m_surface->DrawSetColor(188, 112, 0,
+                (i == m_hoveredEntry || i == m_selectedEntry) ? 230 : 128);
             m_surface->DrawOutlinedRect(x0, y0, x1, y1);
         }
         DrawInformationPanel(left, top);
@@ -785,6 +795,8 @@ private:
         if (hovered != m_hoveredEntry)
         {
             m_hoveredEntry = hovered;
+            if (hovered >= 0)
+                m_selectedEntry = hovered;
             Repaint();
         }
     }
@@ -794,6 +806,7 @@ private:
         m_currentMenu = menuId;
         m_entryCount = 0;
         m_hoveredEntry = -1;
+        m_selectedEntry = -1;
         m_title[0] = '\0';
         ResetLayout();
     }
@@ -1376,9 +1389,10 @@ private:
 
     int PreviewEntry() const
     {
-        if (m_hoveredEntry >= 0 && m_hoveredEntry < m_entryCount &&
-            m_entries[m_hoveredEntry].previewPath[0])
-            return m_hoveredEntry;
+        if (m_selectedEntry >= 0 && m_selectedEntry < m_entryCount &&
+            m_entries[m_selectedEntry].visible &&
+            m_entries[m_selectedEntry].previewPath[0])
+            return m_selectedEntry;
         for (int i = 0; i < m_entryCount; ++i)
         {
             if (m_entries[i].visible && m_entries[i].previewPath[0])
@@ -1547,6 +1561,7 @@ private:
     int m_team;
     int m_entryCount;
     int m_hoveredEntry;
+    int m_selectedEntry;
     vgui2::HFont m_font;
     vgui2::HFont m_titleFont;
     vgui2::HFont m_infoFont;
