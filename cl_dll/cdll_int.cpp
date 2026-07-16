@@ -25,8 +25,10 @@
 #include "pm_shared.h"
 
 #include <string.h>
-#if defined(_WIN32) && defined(_CS16CLIENT_STARTUP_TRACE)
+#if defined(_WIN32)
 #include <windows.h>
+#endif
+#if defined(_WIN32) && defined(_CS16CLIENT_STARTUP_TRACE)
 #include <stdio.h>
 #endif
 #include "interface.h" // not used here
@@ -40,6 +42,75 @@ CHud gHUD;
 #include "particleman.h"
 CSysModule* g_hParticleManModule = NULL;
 IParticleMan* g_pParticleMan = NULL;
+
+#if defined(_WIN32) && (defined(_M_IX86) || defined(__i386__))
+namespace
+{
+PVOID g_cs16EngineCompatHandler = NULL;
+
+LONG CALLBACK CS16_EngineCompatException(EXCEPTION_POINTERS* exceptionInfo)
+{
+	if (!exceptionInfo || !exceptionInfo->ExceptionRecord ||
+		!exceptionInfo->ContextRecord ||
+		exceptionInfo->ExceptionRecord->ExceptionCode != EXCEPTION_ACCESS_VIOLATION ||
+		exceptionInfo->ExceptionRecord->NumberParameters < 2 ||
+		exceptionInfo->ExceptionRecord->ExceptionInformation[0] != 0 ||
+		exceptionInfo->ExceptionRecord->ExceptionInformation[1] != 0x17C)
+	{
+		return EXCEPTION_CONTINUE_SEARCH;
+	}
+
+	BYTE* engine = reinterpret_cast<BYTE*>(GetModuleHandleA("hw.dll"));
+	if (!engine || exceptionInfo->ContextRecord->Eip !=
+		reinterpret_cast<DWORD_PTR>(engine + 0x247D03) ||
+		exceptionInfo->ContextRecord->Eax != 0)
+	{
+		return EXCEPTION_CONTINUE_SEARCH;
+	}
+
+	const IMAGE_DOS_HEADER* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(engine);
+	if (dos->e_magic != IMAGE_DOS_SIGNATURE)
+		return EXCEPTION_CONTINUE_SEARCH;
+	const IMAGE_NT_HEADERS* nt = reinterpret_cast<const IMAGE_NT_HEADERS*>(engine + dos->e_lfanew);
+	if (nt->Signature != IMAGE_NT_SIGNATURE ||
+		nt->FileHeader.TimeDateStamp != 0x670493DA)
+	{
+		return EXCEPTION_CONTINUE_SEARCH;
+	}
+
+	// Steam GoldSrc build 10210 reads cl.worldmodel->visdata here without
+	// checking cl.worldmodel after an essential remote resource fails.  Verify
+	// the exact instruction before resuming in the function's existing
+	// no-visdata branch; unknown engine builds keep their normal exception path.
+	static const BYTE expected[] =
+		{ 0x83, 0xB8, 0x7C, 0x01, 0x00, 0x00, 0x00, 0x0F, 0x84 };
+	if (memcmp(engine + 0x247D03, expected, sizeof(expected)) != 0)
+		return EXCEPTION_CONTINUE_SEARCH;
+
+	exceptionInfo->ContextRecord->Eip =
+		reinterpret_cast<DWORD_PTR>(engine + 0x247DDF);
+	return EXCEPTION_CONTINUE_EXECUTION;
+}
+
+void CS16_InstallEngineCompatHandler()
+{
+	if (!g_cs16EngineCompatHandler)
+		g_cs16EngineCompatHandler = AddVectoredExceptionHandler(1, CS16_EngineCompatException);
+}
+}
+
+void CS16_RemoveEngineCompatHandler()
+{
+	if (g_cs16EngineCompatHandler &&
+		RemoveVectoredExceptionHandler(g_cs16EngineCompatHandler))
+	{
+		g_cs16EngineCompatHandler = NULL;
+	}
+}
+#else
+void CS16_InstallEngineCompatHandler() {}
+void CS16_RemoveEngineCompatHandler() {}
+#endif
 
 #if defined(_WIN32) && defined(_CS16CLIENT_STARTUP_TRACE)
 static bool g_cs16RuntimeTrace = false;
@@ -188,6 +259,7 @@ int CL_DLLEXPORT Initialize(cl_enginefunc_t* pEnginefuncs, int iVersion)
 
 	gEngfuncs = *pEnginefuncs;
 	CS16_StartupTrace("Initialize: engine table copied");
+	CS16_InstallEngineCompatHandler();
 
 	Game_HookEvents();
 	CS16_StartupTrace("Initialize: events hooked");

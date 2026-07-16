@@ -1011,6 +1011,7 @@ void ShutdownInput (void)
 #include "interface.h"
 #include "cs_vgui2.h"
 void CL_UnloadParticleMan( void );
+void CS16_RemoveEngineCompatHandler();
 
 #if defined( _TFC )
 void ClearEventList( void );
@@ -1031,6 +1032,7 @@ void CL_DLLEXPORT HUD_Shutdown( void )
 #endif
 	
 	CL_UnloadParticleMan();
+	CS16_RemoveEngineCompatHandler();
 	CS16_StartupTrace("HUD_Shutdown: complete");
 	CS16_RemoveExceptionTrace();
 }
