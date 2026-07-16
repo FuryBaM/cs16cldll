@@ -50,6 +50,7 @@ int CS16VGUI_GetMapName(char* output, int outputSize);
 int CS16VGUI_LoadMapDescription(char* output, int outputSize);
 int CS16VGUI_LoadTGA(const char* filename, unsigned char* rgba, int rgbaSize,
     int* width, int* height);
+int CS16VGUI_GetRoundTime(char* output, int outputSize);
 
 #ifdef __cplusplus
 }

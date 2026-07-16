@@ -775,6 +775,11 @@ public:
 	// show the timer
 	// [empty]
 	CHudMsgFunc(ShowTimer);
+	int GetRemainingTime(float currentTime) const
+	{
+		const int remaining = (int)(m_iTime + m_fStartTime - currentTime);
+		return remaining > 0 ? remaining : 0;
+	}
 
 	int m_right;
 private:

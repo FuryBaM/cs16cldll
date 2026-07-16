@@ -80,7 +80,8 @@ enum
     CS_TEAM_T = 1,
     CS_TEAM_CT = 2,
     GOLDSRC_KEY_ESCAPE = 27,
-    MAX_COMMAND_MENU_BUTTONS = 32
+    MAX_COMMAND_MENU_BUTTONS = 32,
+    MAX_COMMAND_MENU_DEPTH = 8
 };
 
 // Match the visual language used by Velaron/cs16-client's active HUD UI:
@@ -229,11 +230,12 @@ private:
 class CCommandSlotSignal final : public vgui::ActionSignal
 {
 public:
-    CCommandSlotSignal(CCSViewport* viewport, int slot)
-        : m_viewport(viewport), m_slot(slot) {}
+    CCommandSlotSignal(CCSViewport* viewport, int depth, int slot)
+        : m_viewport(viewport), m_depth(depth), m_slot(slot) {}
     void actionPerformed(vgui::Panel*) override;
 private:
     CCSViewport* m_viewport;
+    int m_depth;
     int m_slot;
 };
 
@@ -388,7 +390,8 @@ class CUnicodeCommandButton final : public CCSMenuButton
 public:
     CUnicodeCommandButton(int x, int y, int wide, int tall)
         : CCSMenuButton("", x, y, wide, tall), m_texture(++g_nextCommandTexture),
-          m_textureWidth(0), m_textureHeight(0), m_hasTexture(false)
+          m_textureWidth(0), m_textureHeight(0), m_hasTexture(false),
+          m_opensSubmenu(false)
     {
         m_text[0] = 0;
     }
@@ -400,6 +403,15 @@ public:
         repaint();
     }
 
+    void SetOpensSubmenu(bool opens) { m_opensSubmenu = opens; }
+
+    void cursorEntered(vgui::Panel* panel) override
+    {
+        CCSMenuButton::cursorEntered(panel);
+        if (m_opensSubmenu)
+            doClick();
+    }
+
 protected:
     void paint() override
     {
@@ -407,6 +419,16 @@ protected:
         drawSetColor(255, 255, 255, 0);
         drawSetTexture(m_texture);
         drawTexturedRect(4, 3, 4 + m_textureWidth, 3 + m_textureHeight);
+    }
+
+    void paintBackground() override
+    {
+        CCSMenuButton::paintBackground();
+        int wide = 0, tall = 0;
+        getPaintSize(wide, tall);
+        drawSetColor(VELARON_ACCENT_R, VELARON_ACCENT_G,
+            VELARON_ACCENT_B, 128);
+        drawOutlinedRect(0, 0, wide, tall);
     }
 
 private:
@@ -437,7 +459,7 @@ private:
         }
 
         HGDIOBJ oldBitmap = SelectObject(dc, bitmap);
-        HFONT font = CreateFontW(-LayoutValue(13), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        HFONT font = CreateFontW(-LayoutValue(11), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
             RUSSIAN_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Tahoma");
         HGDIOBJ oldFont = font ? SelectObject(dc, font) : NULL;
@@ -474,6 +496,7 @@ private:
     int m_textureWidth;
     int m_textureHeight;
     bool m_hasTexture;
+    bool m_opensSubmenu;
 };
 
 class CCSMenuPanel : public vgui::Panel
@@ -763,15 +786,16 @@ public:
 class CCommandMenuPanel final : public CCSMenuPanel
 {
 public:
-    CCommandMenuPanel(CCSViewport* viewport) : CCSMenuPanel("", 90, 220)
+    CCommandMenuPanel(CCSViewport* viewport, int depth)
+        : CCSMenuPanel("", 90, 140), m_depth(depth)
     {
         HideTitle();
         for (int i = 0; i < MAX_COMMAND_MENU_BUTTONS; ++i)
         {
             CUnicodeCommandButton* button = new CUnicodeCommandButton(
-                0, LayoutValue(i * 29), LayoutValue(220), LayoutValue(30));
+                0, LayoutValue(i * 27), LayoutValue(140), LayoutValue(28));
             button->setParent(this);
-            button->addActionSignal(new CCommandSlotSignal(viewport, i));
+            button->addActionSignal(new CCommandSlotSignal(viewport, depth, i));
             button->setVisible(false);
             m_buttons[i] = button;
         }
@@ -789,31 +813,32 @@ public:
         for (int i = 0; i < rows; ++i)
         {
             const char* display = 0;
-            if (!CS16VGUI_CommandMenuGetItem(node, i, &display, 0, 0, 0))
+            int childNode = -1;
+            if (!CS16VGUI_CommandMenuGetItem(node, i, &display, 0,
+                &childNode, 0))
             {
                 m_buttons[i]->setVisible(false);
                 continue;
             }
-            // display already starts with the exact key from commandmenu.txt.
-            m_buttons[i]->SetUtf8Text(display ? display : "");
+            const char* label = display ? strstr(display, "  ") : NULL;
+            label = label ? label + 2 : (display ? display : "");
+            m_buttons[i]->SetUtf8Text(label);
+            m_buttons[i]->SetOpensSubmenu(childNode >= 0);
             m_buttons[i]->setVisible(true);
         }
-        const int parent = CS16VGUI_CommandMenuGetParent(node);
         int visibleRows = rows;
-        if (parent >= 0 && visibleRows < MAX_COMMAND_MENU_BUTTONS)
-        {
-            m_buttons[visibleRows]->SetUtf8Text("0  BACK");
-            m_buttons[visibleRows]->setVisible(true);
-            ++visibleRows;
-        }
         for (int i = visibleRows; i < MAX_COMMAND_MENU_BUTTONS; ++i)
+        {
+            m_buttons[i]->SetOpensSubmenu(false);
             m_buttons[i]->setVisible(false);
-        setSize(LayoutValue(220), LayoutValue(visibleRows > 0
-            ? visibleRows * 29 + 1 : 30));
+        }
+        setSize(LayoutValue(140), LayoutValue(visibleRows > 0
+            ? visibleRows * 27 + 1 : 28));
         CS16VGUI_Trace("VGUI1: command menu refresh complete");
-        return count > 0 || parent >= 0;
+        return count > 0 || CS16VGUI_CommandMenuGetParent(node) >= 0;
     }
 private:
+    int m_depth;
     CUnicodeCommandButton* m_buttons[MAX_COMMAND_MENU_BUTTONS];
 };
 
@@ -824,7 +849,7 @@ public:
         : vgui::Panel(0, 0, width, height), m_width(width), m_height(height),
           m_currentMenu(0), m_team(CS_TEAM_T), m_currentEntries(0),
           m_currentEntryCount(0), m_commandNode(0), m_commandPage(0),
-          m_panelCount(0), m_commandMenu(0)
+          m_commandDepth(0), m_panelCount(0)
     {
         // GoldSrc's VGUI1 surface starts as an opaque black canvas. While a
         // fullscreen viewport menu is visible, ask the engine to paint the
@@ -846,7 +871,13 @@ public:
         m_machineGunsCT = AddPanel(new CBuyPanel(this, "BUY MACHINE GUN", g_machineGuns, Count(g_machineGuns), "resource/UI/BuyMachineguns_CT.res"));
         m_equipmentT = AddPanel(new CBuyPanel(this, "BUY EQUIPMENT", g_equipmentT, Count(g_equipmentT), "resource/UI/BuyEquipment_TER.res"));
         m_equipmentCT = AddPanel(new CBuyPanel(this, "BUY EQUIPMENT", g_equipmentCT, Count(g_equipmentCT), "resource/UI/BuyEquipment_CT.res"));
-        m_commandMenu = static_cast<CCommandMenuPanel*>(AddPanel(new CCommandMenuPanel(this)));
+        for (int depth = 0; depth < MAX_COMMAND_MENU_DEPTH; ++depth)
+        {
+            m_commandMenus[depth] = static_cast<CCommandMenuPanel*>(
+                AddPanel(new CCommandMenuPanel(this, depth)));
+            m_commandNodes[depth] = 0;
+            m_commandAnchorRows[depth] = 0;
+        }
     }
 
     void Attach(vgui::Panel* root, int width, int height)
@@ -871,7 +902,7 @@ public:
     {
         if (m_currentMenu == CS_MENU_COMMAND) { HideMenu(); return 0; }
         if (!CS16VGUI_CommandMenuPrepare()) return 0;
-        return ShowCommandNode(0, 0);
+        return ShowCommandNode(0, 0, 0, true);
     }
     void ReleaseCommandMenu() { if (m_currentMenu == CS_MENU_COMMAND) HideMenu(); }
     void HideMenu()
@@ -881,6 +912,7 @@ public:
         // through this panel's paintBackground(), even when no menu is open.
         HideAllPanels(); m_currentMenu = 0; m_currentEntries = 0;
         m_currentEntryCount = 0; m_commandNode = 0; m_commandPage = 0;
+        m_commandDepth = 0;
         UpdateCursor(false);
         CS16VGUI_Trace("VGUI1: viewport hide panels complete");
     }
@@ -900,20 +932,21 @@ public:
             CS16VGUI_Trace("VGUI1: class action complete");
     }
 
-    void PerformCommandSlot(int slot)
+    void PerformCommandSlot(int depth, int slot)
     {
-        if (m_currentMenu != CS_MENU_COMMAND || slot < 0) return;
-        const int count = CS16VGUI_CommandMenuGetCount(m_commandNode);
-        const int parent = CS16VGUI_CommandMenuGetParent(m_commandNode);
-        if (slot == count && parent >= 0)
-        {
-            ShowCommandNode(parent, 0);
-            return;
-        }
+        if (m_currentMenu != CS_MENU_COMMAND || depth < 0 ||
+            depth > m_commandDepth || slot < 0) return;
+        const int node = m_commandNodes[depth];
+        const int count = CS16VGUI_CommandMenuGetCount(node);
         if (slot >= count || slot >= MAX_COMMAND_MENU_BUTTONS) return;
         int itemIndex = -1, childNode = -1;
-        if (!CS16VGUI_CommandMenuGetItem(m_commandNode, slot, 0, &itemIndex, &childNode, 0)) return;
-        if (childNode >= 0) { ShowCommandNode(childNode, 0); return; }
+        if (!CS16VGUI_CommandMenuGetItem(node, slot, 0, &itemIndex, &childNode, 0)) return;
+        if (childNode >= 0)
+        {
+            if (depth + 1 < MAX_COMMAND_MENU_DEPTH)
+                ShowCommandNode(childNode, depth + 1, slot, false);
+            return;
+        }
         HideMenu(); CS16VGUI_CommandMenuExecute(itemIndex);
     }
 
@@ -923,21 +956,23 @@ public:
         if (keynum == GOLDSRC_KEY_ESCAPE) { PerformAction(0, 0); return 1; }
         if (m_currentMenu == CS_MENU_COMMAND)
         {
-            const int count = CS16VGUI_CommandMenuGetCount(m_commandNode);
+            const int node = m_commandNodes[m_commandDepth];
+            const int count = CS16VGUI_CommandMenuGetCount(node);
             for (int i = 0; i < count && i < MAX_COMMAND_MENU_BUTTONS; ++i)
             {
                 int boundKey = 0;
-                if (CS16VGUI_CommandMenuGetItem(m_commandNode, i, 0, 0, 0,
+                if (CS16VGUI_CommandMenuGetItem(node, i, 0, 0, 0,
                     &boundKey) && boundKey == keynum)
                 {
-                    PerformCommandSlot(i);
+                    PerformCommandSlot(m_commandDepth, i);
                     return 1;
                 }
             }
-            const int parent = CS16VGUI_CommandMenuGetParent(m_commandNode);
-            if (keynum == '0' && parent >= 0)
+            if (keynum == '0' && m_commandDepth > 0)
             {
-                ShowCommandNode(parent, 0);
+                m_commandMenus[m_commandDepth]->setVisible(false);
+                --m_commandDepth;
+                m_commandNode = m_commandNodes[m_commandDepth];
                 return 1;
             }
             return 0;
@@ -993,12 +1028,37 @@ private:
         return panel;
     }
     void HideAllPanels() { for (int i = 0; i < m_panelCount; ++i) m_panels[i]->setVisible(false); }
-    int ShowCommandNode(int node, int page)
+    int ShowCommandNode(int node, int depth, int anchorRow, bool reset)
     {
-        if (!m_commandMenu || !m_commandMenu->Refresh(node, page)) return 0;
-        HideAllPanels(); LayoutMenus(); setVisible(true); m_commandMenu->setVisible(true); m_commandMenu->requestFocus();
+        if (depth < 0 || depth >= MAX_COMMAND_MENU_DEPTH ||
+            !m_commandMenus[depth] || !m_commandMenus[depth]->Refresh(node, 0))
+            return 0;
+        if (reset)
+            HideAllPanels();
+        else
+        {
+            for (int i = depth; i < MAX_COMMAND_MENU_DEPTH; ++i)
+                m_commandMenus[i]->setVisible(false);
+        }
+        m_commandNodes[depth] = node;
+        m_commandAnchorRows[depth] = anchorRow;
+        m_commandDepth = depth;
+        m_commandNode = node;
+        LayoutMenus(); setVisible(true);
+        m_commandMenus[depth]->setVisible(true);
+        m_commandMenus[depth]->requestFocus();
         m_currentMenu = CS_MENU_COMMAND; m_currentEntries = 0; m_currentEntryCount = 0;
-        m_commandNode = node; m_commandPage = page; UpdateCursor(true); repaint(); return 1;
+        m_commandPage = 0; UpdateCursor(true); repaint(); return 1;
+    }
+
+    int CommandPanelDepth(CCSMenuPanel* panel) const
+    {
+        for (int depth = 0; depth < MAX_COMMAND_MENU_DEPTH; ++depth)
+        {
+            if (panel == m_commandMenus[depth])
+                return depth;
+        }
+        return -1;
     }
     CCSMenuPanel* PanelForMenu(int menuId, const BuyEntry*& entries, int& count)
     {
@@ -1019,8 +1079,14 @@ private:
         for (int i = 0; i < m_panelCount; ++i)
         {
             int wide = 0, tall = 0; m_panels[i]->getSize(wide, tall);
-            if (m_panels[i] == m_commandMenu)
-                m_panels[i]->setPos(0, LayoutValue(120));
+            const int commandDepth = CommandPanelDepth(m_panels[i]);
+            if (commandDepth >= 0)
+            {
+                int y = 152;
+                for (int depth = 1; depth <= commandDepth; ++depth)
+                    y += m_commandAnchorRows[depth] * 27;
+                m_panels[i]->setPos(LayoutValue(commandDepth * 139), LayoutValue(y));
+            }
             else
             {
                 int resourceX = 0, resourceY = 0;
@@ -1046,16 +1112,18 @@ private:
 
     int m_width, m_height, m_currentMenu, m_team;
     const BuyEntry* m_currentEntries;
-    int m_currentEntryCount, m_commandNode, m_commandPage;
+    int m_currentEntryCount, m_commandNode, m_commandPage, m_commandDepth;
     CCSMenuPanel* m_panels[24]; int m_panelCount;
     CCSMenuPanel *m_teamMenu, *m_tClassMenu, *m_ctClassMenu, *m_buyRoot;
     CCSMenuPanel *m_pistolsT, *m_pistolsCT, *m_shotgunsT, *m_shotgunsCT, *m_riflesT, *m_riflesCT;
     CCSMenuPanel *m_smgsT, *m_smgsCT, *m_machineGunsT, *m_machineGunsCT, *m_equipmentT, *m_equipmentCT;
-    CCommandMenuPanel* m_commandMenu;
+    CCommandMenuPanel* m_commandMenus[MAX_COMMAND_MENU_DEPTH];
+    int m_commandNodes[MAX_COMMAND_MENU_DEPTH];
+    int m_commandAnchorRows[MAX_COMMAND_MENU_DEPTH];
 };
 
 void CMenuActionSignal::actionPerformed(vgui::Panel*) { m_viewport->PerformAction(m_command, m_targetMenu); }
-void CCommandSlotSignal::actionPerformed(vgui::Panel*) { m_viewport->PerformCommandSlot(m_slot); }
+void CCommandSlotSignal::actionPerformed(vgui::Panel*) { m_viewport->PerformCommandSlot(m_depth, m_slot); }
 CCSViewport* g_viewport = 0;
 }
 

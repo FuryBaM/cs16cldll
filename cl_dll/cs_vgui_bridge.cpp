@@ -706,6 +706,16 @@ extern "C" int CS16VGUI_LoadTGA(const char* filename, unsigned char* rgba,
     return 1;
 }
 
+extern "C" int CS16VGUI_GetRoundTime(char* output, int outputSize)
+{
+    if (!output || outputSize <= 0)
+        return 0;
+    const int remaining = gHUD.m_Timer.GetRemainingTime(gHUD.m_flTime);
+    _snprintf(output, outputSize, "%d:%02d", remaining / 60, remaining % 60);
+    output[outputSize - 1] = '\0';
+    return 1;
+}
+
 extern "C" int CS16VGUI_LoadResourceLayout(const char* filename,
     cs16_vgui_resource_control_t* controls, int maxControls)
 {

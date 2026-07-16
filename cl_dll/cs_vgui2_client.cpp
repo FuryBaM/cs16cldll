@@ -133,7 +133,8 @@ public:
           m_entryCount(0), m_hoveredEntry(-1),
           m_font(vgui2::INVALID_FONT), m_titleFont(vgui2::INVALID_FONT),
           m_infoFont(vgui2::INVALID_FONT),
-          m_previewTexture(0), m_loadedPreviewEntry(-1)
+          m_previewTexture(0), m_loadedPreviewEntry(-1),
+          m_logoTexture(0), m_logoLoaded(false)
     {
         m_title[0] = '\0';
         ResetLayout();
@@ -188,6 +189,8 @@ public:
         m_infoFont = vgui2::INVALID_FONT;
         m_previewTexture = 0;
         m_loadedPreviewEntry = -1;
+        m_logoTexture = 0;
+        m_logoLoaded = false;
     }
 
     bool IsReady() const { return m_vpanel != 0; }
@@ -289,6 +292,7 @@ public:
         if (menuId != CS_MENU_BUY)
             Add("0  CANCEL", NULL, 0, 0);
         LoadMenuResource(menuId);
+        ConfigureInformationPanel(menuId);
         ApplyMenuRules(menuId);
         if (!wasVisible)
         {
@@ -396,23 +400,23 @@ public:
             return;
 
         m_surface->PushMakeCurrent(m_vpanel, false);
+        EnsureFonts();
         int left = 0, top = 0;
         GetMenuOrigin(left, top);
-        const int wide = m_rootWide;
-        const int tall = m_rootTall;
-        m_surface->DrawSetColor(0, 0, 0, 170);
-        m_surface->DrawFilledRect(left, top, left + wide, top + tall);
+        DrawViewportBackground();
         m_surface->DrawSetColor(255, 140, 0, 225);
         for (int i = 0; i < m_decorationCount; ++i)
         {
             const Decoration& decoration = m_decorations[i];
-            m_surface->DrawFilledRect(left + decoration.x, top + decoration.y,
-                left + decoration.x + decoration.wide,
-                top + decoration.y + decoration.tall);
+            m_surface->DrawFilledRect(ScaleX(left + decoration.x),
+                ScaleY(top + decoration.y),
+                ScaleX(left + decoration.x + decoration.wide),
+                ScaleY(top + decoration.y + decoration.tall));
         }
 
-        EnsureFonts();
-        DrawText(left + m_titleX, top + m_titleY + TitleTextInset(), m_title,
+        const int titleY = ScaleY(top + m_titleY) +
+            (ScaleY(m_titleTall) - m_surface->GetFontTall(m_titleFont)) / 2;
+        DrawText(ScaleX(left + m_titleX), titleY, m_title,
             m_titleFont, 255, 140, 0, 255);
         for (int i = 0; i < m_resourceLabelCount; ++i)
             DrawResourceLabel(left, top, m_resourceLabels[i]);
@@ -421,20 +425,27 @@ public:
             const MenuEntry& entry = m_entries[i];
             if (!entry.visible)
                 continue;
+            const int x0 = ScaleX(left + entry.x);
+            const int y0 = ScaleY(top + entry.y);
+            const int x1 = ScaleX(left + entry.x + entry.wide);
+            const int y1 = ScaleY(top + entry.y + entry.tall);
             if (i == m_hoveredEntry)
             {
-                m_surface->DrawSetColor(120, 65, 0, 190);
-                m_surface->DrawFilledRect(left + entry.x, top + entry.y,
-                    left + entry.x + entry.wide, top + entry.y + entry.tall);
-                DrawText(left + entry.x, top + entry.y + EntryTextInset(entry),
+                m_surface->DrawSetColor(120, 65, 0, 165);
+                m_surface->DrawFilledRect(x0, y0, x1, y1);
+                DrawText(ScaleX(left + entry.x + 6),
+                    y0 + (y1 - y0 - m_surface->GetFontTall(m_font)) / 2,
                     entry.label, m_font, 255, 220, 120, 255);
             }
             else
             {
-                DrawText(left + entry.x, top + entry.y + EntryTextInset(entry),
+                DrawText(ScaleX(left + entry.x + 6),
+                    y0 + (y1 - y0 - m_surface->GetFontTall(m_font)) / 2,
                     entry.label, m_font, entry.enabled ? 255 : 140,
                     entry.enabled ? 165 : 100, entry.enabled ? 35 : 30, 255);
             }
+            m_surface->DrawSetColor(188, 112, 0, i == m_hoveredEntry ? 230 : 128);
+            m_surface->DrawOutlinedRect(x0, y0, x1, y1);
         }
         DrawInformationPanel(left, top);
         m_surface->PopMakeCurrent(m_vpanel);
@@ -534,13 +545,72 @@ private:
     template <typename T, int N>
     static int Count(const T (&)[N]) { return N; }
 
+    int ScaleX(int value) const
+    {
+        int wide = 640, tall = 480;
+        if (m_surface) m_surface->GetScreenSize(wide, tall);
+        return value * wide / 640;
+    }
+
+    int ScaleY(int value) const
+    {
+        int wide = 640, tall = 480;
+        if (m_surface) m_surface->GetScreenSize(wide, tall);
+        return value * tall / 480;
+    }
+
+    void DrawViewportBackground()
+    {
+        const int x0 = ScaleX(20), y0 = ScaleY(20);
+        const int x1 = ScaleX(620), y1 = ScaleY(460);
+        const int radiusX = ScaleX(10), radiusY = ScaleY(10);
+        m_surface->DrawSetColor(0, 0, 0, 188);
+        m_surface->DrawFilledRect(x0 + radiusX, y0, x1 - radiusX, y1);
+        m_surface->DrawFilledRect(x0, y0 + radiusY, x1, y1 - radiusY);
+        m_surface->DrawFilledRect(x0 + radiusX / 2, y0 + radiusY / 3,
+            x1 - radiusX / 2, y1 - radiusY / 3);
+
+        m_surface->DrawSetColor(180, 180, 180, 115);
+        m_surface->DrawFilledRect(ScaleX(20), ScaleY(72),
+            ScaleX(620), ScaleY(73));
+
+        if (!m_logoLoaded)
+        {
+            if (!m_logoTexture)
+                m_logoTexture = m_surface->CreateNewTextureID(false);
+            int width = 0, height = 0;
+            if (m_logoTexture && CS16VGUI_LoadTGA("gfx/vgui/CS_logo.tga",
+                m_previewPixels, sizeof(m_previewPixels), &width, &height))
+            {
+                m_surface->DrawSetTextureRGBA(m_logoTexture, m_previewPixels,
+                    width, height, 1, true);
+                m_logoLoaded = true;
+            }
+        }
+        if (m_logoLoaded)
+        {
+            m_surface->DrawSetColor(255, 174, 0, 255);
+            m_surface->DrawSetTexture(m_logoTexture);
+            m_surface->DrawTexturedRect(ScaleX(26), ScaleY(26),
+                ScaleX(66), ScaleY(66));
+        }
+
+        char roundTime[32];
+        if (CS16VGUI_GetRoundTime(roundTime, sizeof(roundTime)))
+        {
+            const int textWide = TextWidth(roundTime, m_titleFont);
+            DrawText((ScaleX(640) - textWide) / 2, ScaleY(33), roundTime,
+                m_titleFont, 188, 112, 0, 55);
+        }
+    }
+
     void EnsureFonts()
     {
         if (m_font == vgui2::INVALID_FONT)
         {
             m_font = m_surface->CreateFont();
             if (m_font != vgui2::INVALID_FONT)
-                m_surface->AddGlyphSetToFont(m_font, "Verdana", 16, 500, 0, 0,
+                m_surface->AddGlyphSetToFont(m_font, "Verdana", 12, 500, 0, 0,
                     vgui2::ISurface::FONTFLAG_ANTIALIAS, 0x0000, 0x04ff);
         }
         if (m_titleFont == vgui2::INVALID_FONT)
@@ -554,7 +624,7 @@ private:
         {
             m_infoFont = m_surface->CreateFont();
             if (m_infoFont != vgui2::INVALID_FONT)
-                m_surface->AddGlyphSetToFont(m_infoFont, "Verdana", 13, 500, 0, 0,
+                m_surface->AddGlyphSetToFont(m_infoFont, "Verdana", 12, 500, 0, 0,
                     vgui2::ISurface::FONTFLAG_ANTIALIAS, 0x0000, 0x04ff);
         }
     }
@@ -695,8 +765,10 @@ private:
         {
             const MenuEntry& entry = m_entries[i];
             if (entry.visible && entry.enabled &&
-                x >= left + entry.x && x < left + entry.x + entry.wide &&
-                y >= top + entry.y && y < top + entry.y + entry.tall)
+                x >= ScaleX(left + entry.x) &&
+                x < ScaleX(left + entry.x + entry.wide) &&
+                y >= ScaleY(top + entry.y) &&
+                y < ScaleY(top + entry.y + entry.tall))
                 return i;
         }
         return -1;
@@ -802,6 +874,7 @@ private:
         m_infoPanelAvailable = false;
         m_mapInfoAvailable = false;
         m_infoX = m_infoY = m_infoWide = m_infoTall = 0;
+        m_infoBoxWide = m_infoBoxTall = m_infoTextGap = 0;
         m_mapInfoX = m_mapInfoY = m_mapInfoWide = m_mapInfoTall = 0;
         m_mapDescription[0] = '\0';
         m_loadedPreviewEntry = -1;
@@ -901,8 +974,15 @@ private:
                  !_stricmp(control.controlName, "WizardSubPanel")) &&
                 control.wide > 0 && control.tall > 0)
             {
-                m_layoutOffsetX = control.xpos;
-                m_layoutOffsetY = control.ypos;
+                // Frame children are positioned relative to the frame. The
+                // stock Buy Wizard resources, despite declaring xpos/ypos on
+                // their root, place their children directly in the common
+                // viewport (confirmed by the original client rendering).
+                if (!_stricmp(control.controlName, "Frame"))
+                {
+                    m_layoutOffsetX = control.xpos;
+                    m_layoutOffsetY = control.ypos;
+                }
                 hasRoot = true;
                 break;
             }
@@ -1106,6 +1186,30 @@ private:
         }
     }
 
+    void ConfigureInformationPanel(int menuId)
+    {
+        if (!m_infoPanelAvailable)
+            return;
+        m_infoWide = 300;
+        m_infoTall = 440 - m_infoY;
+        m_infoBoxWide = 300;
+        if (menuId == CS_MENU_CLASS_T || menuId == CS_MENU_CLASS_CT)
+        {
+            m_infoBoxTall = 196;
+            m_infoTextGap = 34;
+        }
+        else if (menuId == CS_MENU_BUY_EQUIPMENT)
+        {
+            m_infoBoxTall = 144;
+            m_infoTextGap = 15;
+        }
+        else
+        {
+            m_infoBoxTall = 80;
+            m_infoTextGap = 15;
+        }
+    }
+
     static void AppendText(char* destination, int size, const char* text)
     {
         if (!destination || size <= 0 || !text || !text[0])
@@ -1204,6 +1308,7 @@ private:
         if (!LocalizeToken(labelToken, label, sizeof(label)))
             CopyText(label, sizeof(label), labelSuffix);
         AppendText(m_infoText, sizeof(m_infoText), label);
+        AppendText(m_infoText, sizeof(m_infoText), "\t");
         AppendText(m_infoText, sizeof(m_infoText), value);
         AppendText(m_infoText, sizeof(m_infoText), "\n");
     }
@@ -1217,12 +1322,6 @@ private:
             if (!base)
                 return;
             char token[96], localized[1024];
-            _snprintf(token, sizeof(token), "#Cstrike_%s_Name", base);
-            if (LocalizeToken(token, localized, sizeof(localized)))
-            {
-                AppendText(m_infoText, sizeof(m_infoText), localized);
-                AppendText(m_infoText, sizeof(m_infoText), "\n\n");
-            }
             _snprintf(token, sizeof(token), "#Cstrike_%s_Label", base);
             if (LocalizeToken(token, localized, sizeof(localized)))
                 AppendText(m_infoText, sizeof(m_infoText), localized);
@@ -1312,14 +1411,16 @@ private:
 
     void DrawResourceLabel(int left, int top, const ResourceLabel& label)
     {
-        int x = left + label.x;
+        int x = ScaleX(left + label.x);
         if (label.centered)
         {
             const int textWide = TextWidth(label.text, m_font);
-            x += (label.wide - textWide) / 2;
+            x += (ScaleX(label.wide) - textWide) / 2;
         }
-        const int inset = label.tall > 16 ? (label.tall - 16) / 2 : 0;
-        DrawText(x, top + label.y + inset, label.text, m_font,
+        const int y0 = ScaleY(top + label.y);
+        const int tall = ScaleY(label.tall);
+        DrawText(x, y0 + (tall - m_surface->GetFontTall(m_font)) / 2,
+            label.text, m_font,
             255, 165, 35, 255);
     }
 
@@ -1328,10 +1429,17 @@ private:
         if (m_currentMenu == CS_MENU_TEAM && m_mapInfoAvailable &&
             m_mapDescription[0])
         {
-            const int x = left + m_mapInfoX + 8;
-            const int y = top + m_mapInfoY + 8;
-            DrawWrappedText(x, y, m_mapInfoWide - 16,
-                top + m_mapInfoY + m_mapInfoTall - 8, m_mapDescription,
+            const int x0 = ScaleX(left + m_mapInfoX);
+            const int y0 = ScaleY(top + m_mapInfoY);
+            const int x1 = ScaleX(left + m_mapInfoX + m_mapInfoWide);
+            const int y1 = ScaleY(top + m_mapInfoY + m_mapInfoTall);
+            m_surface->DrawSetColor(188, 112, 0, 150);
+            m_surface->DrawOutlinedRect(x0, y0, x1, y1);
+            const int scrollWide = ScaleX(16);
+            m_surface->DrawOutlinedRect(x1 - scrollWide, y0,
+                x1, y1);
+            DrawWrappedText(x0 + ScaleX(3), y0 + ScaleY(3),
+                x1 - x0 - scrollWide - ScaleX(6), y1 - ScaleY(3), m_mapDescription,
                 230, 180, 90, 255);
             return;
         }
@@ -1343,17 +1451,19 @@ private:
             return;
         LoadPreview(entryIndex);
 
-        int drawWide = m_previewWide;
-        int drawTall = m_previewTall;
-        if ((m_currentMenu == CS_MENU_CLASS_T ||
-             m_currentMenu == CS_MENU_CLASS_CT) && drawTall > 176)
-        {
-            drawWide = drawWide * 176 / drawTall;
-            drawTall = 176;
-        }
-        int imageX = left + m_infoX + (m_infoWide - drawWide) / 2;
-        int imageY = top + m_infoY;
-        if (imageX < left + m_infoX) imageX = left + m_infoX;
+        const int boxX0 = ScaleX(left + m_infoX);
+        const int boxY0 = ScaleY(top + m_infoY);
+        const int boxX1 = ScaleX(left + m_infoX + m_infoBoxWide);
+        const int boxY1 = ScaleY(top + m_infoY + m_infoBoxTall);
+        m_surface->DrawSetColor(188, 112, 0, 150);
+        m_surface->DrawOutlinedRect(boxX0, boxY0, boxX1, boxY1);
+
+        const int drawWide = ScaleX(m_previewWide);
+        const int drawTall = ScaleY(m_previewTall);
+        int imageX = boxX0 + (boxX1 - boxX0 - drawWide) / 2;
+        int imageY = boxY0 + (boxY1 - boxY0 - drawTall) / 2;
+        if (imageX < boxX0) imageX = boxX0;
+        if (imageY < boxY0) imageY = boxY0;
         if (m_previewTexture && drawWide > 0 && drawTall > 0)
         {
             m_surface->DrawSetColor(255, 255, 255, 255);
@@ -1362,22 +1472,41 @@ private:
                 imageX + drawWide, imageY + drawTall);
         }
 
-        const int textY = imageY + (drawTall > 0 ? drawTall + 8 : 0);
-        DrawWrappedText(left + m_infoX + 8, textY, m_infoWide - 16,
-            top + m_infoY + m_infoTall, m_infoText, 230, 180, 90, 255);
+        const int textX = ScaleX(left + m_infoX);
+        const int textY = ScaleY(top + m_infoY + m_infoBoxTall + m_infoTextGap);
+        const int textBottom = ScaleY(top + m_infoY + m_infoTall);
+        if (m_currentMenu >= CS_MENU_BUY_PISTOL &&
+            m_currentMenu <= CS_MENU_BUY_MACHINEGUN)
+        {
+            char text[2048];
+            CopyText(text, sizeof(text), m_infoText);
+            const int lineTall = m_surface->GetFontTall(m_infoFont) + 3;
+            int y = textY;
+            for (char* line = text; line && *line && y + lineTall <= textBottom;)
+            {
+                char* next = strchr(line, '\n');
+                if (next) *next++ = '\0';
+                char* value = strchr(line, '\t');
+                if (value) *value++ = '\0';
+                DrawText(textX, y, line, m_infoFont, 230, 180, 90, 255);
+                if (value)
+                    DrawText(ScaleX(left + m_infoX + 140), y, value,
+                        m_infoFont, 230, 180, 90, 255);
+                y += lineTall;
+                line = next;
+            }
+        }
+        else
+        {
+            DrawWrappedText(textX, textY, ScaleX(m_infoWide), textBottom,
+                m_infoText, 230, 180, 90, 255);
+        }
     }
 
     void GetMenuOrigin(int& x, int& y) const
     {
-        int screenWide = 640, screenTall = 480;
-        if (m_surface)
-            m_surface->GetScreenSize(screenWide, screenTall);
-        int canvasX = (screenWide - 640) / 2;
-        int canvasY = (screenTall - 480) / 2;
-        if (canvasX < 0) canvasX = 0;
-        if (canvasY < 0) canvasY = 0;
-        x = canvasX + m_rootX;
-        y = canvasY + m_rootY;
+        x = m_rootX;
+        y = m_rootY;
     }
 
     int TitleTextInset() const
@@ -1432,10 +1561,13 @@ private:
     bool m_infoPanelAvailable;
     bool m_mapInfoAvailable;
     int m_infoX, m_infoY, m_infoWide, m_infoTall;
+    int m_infoBoxWide, m_infoBoxTall, m_infoTextGap;
     int m_mapInfoX, m_mapInfoY, m_mapInfoWide, m_mapInfoTall;
     int m_previewTexture;
     int m_loadedPreviewEntry;
     int m_previewWide, m_previewTall;
+    int m_logoTexture;
+    bool m_logoLoaded;
     char m_infoText[2048];
     char m_mapDescription[4096];
     unsigned char m_previewPixels[256 * 256 * 4];
