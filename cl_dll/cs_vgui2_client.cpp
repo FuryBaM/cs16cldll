@@ -132,6 +132,7 @@ public:
           m_currentMenu(0), m_team(CS_TEAM_T),
           m_entryCount(0), m_hoveredEntry(-1),
           m_font(vgui2::INVALID_FONT), m_titleFont(vgui2::INVALID_FONT),
+          m_infoFont(vgui2::INVALID_FONT),
           m_previewTexture(0), m_loadedPreviewEntry(-1)
     {
         m_title[0] = '\0';
@@ -184,6 +185,7 @@ public:
         m_input = NULL;
         m_font = vgui2::INVALID_FONT;
         m_titleFont = vgui2::INVALID_FONT;
+        m_infoFont = vgui2::INVALID_FONT;
         m_previewTexture = 0;
         m_loadedPreviewEntry = -1;
     }
@@ -548,6 +550,13 @@ private:
                 m_surface->AddGlyphSetToFont(m_titleFont, "Verdana Bold", 18, 500, 0, 0,
                 vgui2::ISurface::FONTFLAG_ANTIALIAS, 0x0000, 0x04ff);
         }
+        if (m_infoFont == vgui2::INVALID_FONT)
+        {
+            m_infoFont = m_surface->CreateFont();
+            if (m_infoFont != vgui2::INVALID_FONT)
+                m_surface->AddGlyphSetToFont(m_infoFont, "Verdana", 13, 500, 0, 0,
+                    vgui2::ISurface::FONTFLAG_ANTIALIAS, 0x0000, 0x04ff);
+        }
     }
 
     static int ConvertText(const char* text, wchar_t* wide, int capacity)
@@ -606,7 +615,9 @@ private:
         if (!text || !text[0] || width <= 0 || height <= 0)
             return;
 
-        const int lineTall = m_surface->GetFontTall(m_font) + 2;
+        const vgui2::HFont font = m_infoFont != vgui2::INVALID_FONT
+            ? m_infoFont : m_font;
+        const int lineTall = m_surface->GetFontTall(font) + 2;
         char line[256];
         int lineLength = 0;
         line[0] = '\0';
@@ -621,7 +632,7 @@ private:
             if (*cursor == '\n')
             {
                 if (lineLength > 0)
-                    DrawText(x, y, line, m_font, r, g, b, a);
+                    DrawText(x, y, line, font, r, g, b, a);
                 lineLength = 0;
                 line[0] = '\0';
                 y += lineTall;
@@ -646,9 +657,9 @@ private:
             else
                 _snprintf(candidate, sizeof(candidate), "%s", word);
             candidate[sizeof(candidate) - 1] = '\0';
-            if (lineLength && TextWidth(candidate, m_font) > width)
+            if (lineLength && TextWidth(candidate, font) > width)
             {
-                DrawText(x, y, line, m_font, r, g, b, a);
+                DrawText(x, y, line, font, r, g, b, a);
                 y += lineTall;
                 CopyText(line, sizeof(line), word);
                 lineLength = (int)strlen(line);
@@ -660,7 +671,7 @@ private:
             }
         }
         if (lineLength > 0 && y + lineTall <= height)
-            DrawText(x, y, line, m_font, r, g, b, a);
+            DrawText(x, y, line, font, r, g, b, a);
     }
 
     void ExecuteEntryUnderCursor()
@@ -773,6 +784,8 @@ private:
 
     void ResetLayout()
     {
+        m_layoutOffsetX = 0;
+        m_layoutOffsetY = 0;
         m_rootX = 0;
         m_rootY = 0;
         m_rootWide = 640;
@@ -879,6 +892,26 @@ private:
         int resourceButton = 0;
         m_decorationCount = 0;
 
+        // Frame/WizardSubPanel coordinates are offsets inside CS's common
+        // 640-wide viewport, not independent background rectangles.
+        for (int i = 0; i < count; ++i)
+        {
+            const cs16_vgui_resource_control_t& control = controls[i];
+            if ((!_stricmp(control.controlName, "Frame") ||
+                 !_stricmp(control.controlName, "WizardSubPanel")) &&
+                control.wide > 0 && control.tall > 0)
+            {
+                m_layoutOffsetX = control.xpos;
+                m_layoutOffsetY = control.ypos;
+                hasRoot = true;
+                break;
+            }
+        }
+        m_rootX = 0;
+        m_rootY = 0;
+        m_rootWide = 640;
+        m_rootTall = 448;
+
         // Resolve the custom information targets before assigning buttons.
         // MouseOverPanelButton controls point at these panels indirectly.
         for (int i = 0; i < count; ++i)
@@ -891,8 +924,8 @@ private:
                 control.xpos >= 0 && control.xpos < 640)
             {
                 m_infoPanelAvailable = true;
-                m_infoX = control.xpos;
-                m_infoY = control.ypos;
+                m_infoX = m_layoutOffsetX + control.xpos;
+                m_infoY = m_layoutOffsetY + control.ypos;
                 m_infoWide = control.wide;
                 m_infoTall = control.tall;
             }
@@ -901,8 +934,8 @@ private:
                 control.wide > 0 && control.tall > 0)
             {
                 m_mapInfoAvailable = true;
-                m_mapInfoX = control.xpos;
-                m_mapInfoY = control.ypos;
+                m_mapInfoX = m_layoutOffsetX + control.xpos;
+                m_mapInfoY = m_layoutOffsetY + control.ypos;
                 m_mapInfoWide = control.wide;
                 m_mapInfoTall = control.tall;
                 CS16VGUI_LoadMapDescription(m_mapDescription,
@@ -917,10 +950,6 @@ private:
                 !_stricmp(control.controlName, "WizardSubPanel");
             if (isRoot && control.wide > 0 && control.tall > 0)
             {
-                m_rootX = control.xpos;
-                m_rootY = control.ypos;
-                m_rootWide = control.wide;
-                m_rootTall = control.tall;
                 hasRoot = true;
                 continue;
             }
@@ -937,8 +966,8 @@ private:
                     BuildPreviewPath(entry);
                 if (control.wide > 0 && control.tall > 0)
                 {
-                    entry.x = control.xpos;
-                    entry.y = control.ypos;
+                    entry.x = m_layoutOffsetX + control.xpos;
+                    entry.y = m_layoutOffsetY + control.ypos;
                     entry.wide = control.wide;
                     entry.tall = control.tall;
                 }
@@ -962,8 +991,8 @@ private:
                  !_stricmp(control.fieldName, "joinClass"));
             if (isTitle && !hasTitle)
             {
-                m_titleX = control.xpos;
-                m_titleY = control.ypos;
+                m_titleX = m_layoutOffsetX + control.xpos;
+                m_titleY = m_layoutOffsetY + control.ypos;
                 m_titleTall = control.tall > 0 ? control.tall : 48;
                 if (control.labelText[0])
                 {
@@ -983,8 +1012,8 @@ private:
                 CS16VGUI_LocalizeResourceText(control.labelText, label.text,
                     sizeof(label.text));
                 RemoveAccelerators(label.text);
-                label.x = control.xpos;
-                label.y = control.ypos;
+                label.x = m_layoutOffsetX + control.xpos;
+                label.y = m_layoutOffsetY + control.ypos;
                 label.wide = control.wide;
                 label.tall = control.tall;
                 label.centered = !_stricmp(control.textAlignment, "center");
@@ -996,8 +1025,8 @@ private:
                 m_decorationCount < MAX_DECORATIONS)
             {
                 Decoration& decoration = m_decorations[m_decorationCount++];
-                decoration.x = control.xpos;
-                decoration.y = control.ypos;
+                decoration.x = m_layoutOffsetX + control.xpos;
+                decoration.y = m_layoutOffsetY + control.ypos;
                 decoration.wide = control.wide;
                 decoration.tall = control.tall;
             }
@@ -1006,21 +1035,52 @@ private:
         for (int i = resourceButton; i < m_entryCount; ++i)
             m_entries[i].visible = false;
 
-        // MainBuyMenu.res intentionally has no root control: it describes a
-        // 640x448 canvas directly.  Other stock resources supply Frame or
-        // WizardSubPanel bounds.
-        if (!hasRoot)
+        // ClassInfo/ItemInfo in the stock files can extend beyond their
+        // WizardSubPanel. Keep images and wrapped descriptions inside the
+        // shared viewport instead of painting past the black surface.
+        if (m_infoPanelAvailable)
         {
-            m_rootX = 0;
-            m_rootY = 0;
-            m_rootWide = 640;
-            m_rootTall = 448;
+            if (m_infoX + m_infoWide > m_rootWide)
+                m_infoWide = m_rootWide - m_infoX;
+            if (m_infoY + m_infoTall > m_rootTall)
+                m_infoTall = m_rootTall - m_infoY;
+            if (m_infoWide <= 0 || m_infoTall <= 0)
+                m_infoPanelAvailable = false;
         }
+        (void)hasRoot;
         return true;
     }
 
     void ApplyMenuRules(int menuId)
     {
+        if (menuId == CS_MENU_CLASS_T || menuId == CS_MENU_CLASS_CT)
+        {
+            int nextY = m_entryCount > 0 ? m_entries[0].y : 116;
+            for (int i = 0; i < m_entryCount; ++i)
+            {
+                MenuEntry& entry = m_entries[i];
+                const bool fifthClass = i == 4 ||
+                    !_stricmp(entry.fieldName, "militia") ||
+                    !_stricmp(entry.fieldName, "spetsnaz");
+                const bool autoSelect = i == 5 ||
+                    !_strnicmp(entry.fieldName, "autoselect_", 11);
+                if (fifthClass)
+                    entry.visible = false;
+                else if (autoSelect)
+                {
+                    entry.key = 5;
+                    entry.command = "joinclass 5\n";
+                }
+
+                if (entry.visible)
+                {
+                    entry.y = nextY;
+                    nextY += 32;
+                }
+            }
+            return;
+        }
+
         if (menuId != CS_MENU_TEAM)
             return;
 
@@ -1062,6 +1122,25 @@ private:
         if (!token || !output || size <= 0)
             return false;
         CS16VGUI_LocalizeResourceText(token, output, size);
+        char* destination = output;
+        for (const char* source = output; *source; ++source)
+        {
+            if (*source == '\\' && source[1] == 'n')
+            {
+                *destination++ = '\n';
+                ++source;
+            }
+            else if (*source == '\\' && source[1] == 't')
+            {
+                *destination++ = ' ';
+                ++source;
+            }
+            else
+            {
+                *destination++ = *source;
+            }
+        }
+        *destination = '\0';
         return output[0] && _stricmp(output, token);
     }
 
@@ -1219,10 +1298,13 @@ private:
         m_previewWide = m_previewTall = 0;
         if (m_previewTexture)
         {
-            m_surface->DrawSetTextureFile(m_previewTexture,
-                m_entries[entryIndex].previewPath, 1, true);
-            m_surface->DrawGetTextureSize(m_previewTexture, m_previewWide,
-                m_previewTall);
+            if (CS16VGUI_LoadTGA(m_entries[entryIndex].previewPath,
+                m_previewPixels, sizeof(m_previewPixels), &m_previewWide,
+                &m_previewTall))
+            {
+                m_surface->DrawSetTextureRGBA(m_previewTexture,
+                    m_previewPixels, m_previewWide, m_previewTall, 1, true);
+            }
         }
         BuildInformationText(m_entries[entryIndex]);
         m_loadedPreviewEntry = entryIndex;
@@ -1261,18 +1343,26 @@ private:
             return;
         LoadPreview(entryIndex);
 
-        int imageX = left + m_infoX + (m_infoWide - m_previewWide) / 2;
+        int drawWide = m_previewWide;
+        int drawTall = m_previewTall;
+        if ((m_currentMenu == CS_MENU_CLASS_T ||
+             m_currentMenu == CS_MENU_CLASS_CT) && drawTall > 176)
+        {
+            drawWide = drawWide * 176 / drawTall;
+            drawTall = 176;
+        }
+        int imageX = left + m_infoX + (m_infoWide - drawWide) / 2;
         int imageY = top + m_infoY;
         if (imageX < left + m_infoX) imageX = left + m_infoX;
-        if (m_previewTexture && m_previewWide > 0 && m_previewTall > 0)
+        if (m_previewTexture && drawWide > 0 && drawTall > 0)
         {
             m_surface->DrawSetColor(255, 255, 255, 255);
             m_surface->DrawSetTexture(m_previewTexture);
             m_surface->DrawTexturedRect(imageX, imageY,
-                imageX + m_previewWide, imageY + m_previewTall);
+                imageX + drawWide, imageY + drawTall);
         }
 
-        const int textY = imageY + (m_previewTall > 0 ? m_previewTall + 8 : 0);
+        const int textY = imageY + (drawTall > 0 ? drawTall + 8 : 0);
         DrawWrappedText(left + m_infoX + 8, textY, m_infoWide - 16,
             top + m_infoY + m_infoTall, m_infoText, 230, 180, 90, 255);
     }
@@ -1330,7 +1420,9 @@ private:
     int m_hoveredEntry;
     vgui2::HFont m_font;
     vgui2::HFont m_titleFont;
+    vgui2::HFont m_infoFont;
     char m_title[128];
+    int m_layoutOffsetX, m_layoutOffsetY;
     int m_rootX, m_rootY, m_rootWide, m_rootTall;
     int m_titleX, m_titleY, m_titleTall;
     Decoration m_decorations[MAX_DECORATIONS];
@@ -1346,6 +1438,7 @@ private:
     int m_previewWide, m_previewTall;
     char m_infoText[2048];
     char m_mapDescription[4096];
+    unsigned char m_previewPixels[256 * 256 * 4];
     MenuEntry m_entries[MAX_MENU_ENTRIES];
 };
 

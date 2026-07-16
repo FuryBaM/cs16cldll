@@ -48,6 +48,8 @@ int CS16VGUI_CanSpectate(void);
 int CS16VGUI_HasTeam(void);
 int CS16VGUI_GetMapName(char* output, int outputSize);
 int CS16VGUI_LoadMapDescription(char* output, int outputSize);
+int CS16VGUI_LoadTGA(const char* filename, unsigned char* rgba, int rgbaSize,
+    int* width, int* height);
 
 #ifdef __cplusplus
 }

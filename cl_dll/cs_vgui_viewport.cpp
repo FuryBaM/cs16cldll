@@ -798,11 +798,20 @@ public:
             m_buttons[i]->SetUtf8Text(display ? display : "");
             m_buttons[i]->setVisible(true);
         }
-        for (int i = rows; i < MAX_COMMAND_MENU_BUTTONS; ++i)
+        const int parent = CS16VGUI_CommandMenuGetParent(node);
+        int visibleRows = rows;
+        if (parent >= 0 && visibleRows < MAX_COMMAND_MENU_BUTTONS)
+        {
+            m_buttons[visibleRows]->SetUtf8Text("0  BACK");
+            m_buttons[visibleRows]->setVisible(true);
+            ++visibleRows;
+        }
+        for (int i = visibleRows; i < MAX_COMMAND_MENU_BUTTONS; ++i)
             m_buttons[i]->setVisible(false);
-        setSize(LayoutValue(220), LayoutValue(rows > 0 ? rows * 29 + 1 : 30));
+        setSize(LayoutValue(220), LayoutValue(visibleRows > 0
+            ? visibleRows * 29 + 1 : 30));
         CS16VGUI_Trace("VGUI1: command menu refresh complete");
-        return count > 0 || CS16VGUI_CommandMenuGetParent(node) >= 0;
+        return count > 0 || parent >= 0;
     }
 private:
     CUnicodeCommandButton* m_buttons[MAX_COMMAND_MENU_BUTTONS];
@@ -895,6 +904,12 @@ public:
     {
         if (m_currentMenu != CS_MENU_COMMAND || slot < 0) return;
         const int count = CS16VGUI_CommandMenuGetCount(m_commandNode);
+        const int parent = CS16VGUI_CommandMenuGetParent(m_commandNode);
+        if (slot == count && parent >= 0)
+        {
+            ShowCommandNode(parent, 0);
+            return;
+        }
         if (slot >= count || slot >= MAX_COMMAND_MENU_BUTTONS) return;
         int itemIndex = -1, childNode = -1;
         if (!CS16VGUI_CommandMenuGetItem(m_commandNode, slot, 0, &itemIndex, &childNode, 0)) return;
@@ -918,6 +933,12 @@ public:
                     PerformCommandSlot(i);
                     return 1;
                 }
+            }
+            const int parent = CS16VGUI_CommandMenuGetParent(m_commandNode);
+            if (keynum == '0' && parent >= 0)
+            {
+                ShowCommandNode(parent, 0);
+                return 1;
             }
             return 0;
         }

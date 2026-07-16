@@ -645,6 +645,67 @@ extern "C" int CS16VGUI_LoadMapDescription(char* output, int outputSize)
     return length > 0;
 }
 
+extern "C" int CS16VGUI_LoadTGA(const char* filename, unsigned char* rgba,
+    int rgbaSize, int* width, int* height)
+{
+    if (width) *width = 0;
+    if (height) *height = 0;
+    if (!filename || !filename[0] || !rgba || rgbaSize <= 0 ||
+        !gEngfuncs.COM_LoadFile || !gEngfuncs.COM_FreeFile)
+        return 0;
+
+    int length = 0;
+    byte* file = gEngfuncs.COM_LoadFile((char*)filename, 5, &length);
+    if (!file || length < 18)
+    {
+        if (file) gEngfuncs.COM_FreeFile(file);
+        return 0;
+    }
+
+    const int imageType = file[2];
+    const int imageWidth = file[12] | (file[13] << 8);
+    const int imageHeight = file[14] | (file[15] << 8);
+    const int bitsPerPixel = file[16];
+    const int bytesPerPixel = bitsPerPixel / 8;
+    const int dataOffset = 18 + file[0];
+    const int pixelCount = imageWidth > 0 && imageHeight > 0 &&
+        imageWidth <= 4096 && imageHeight <= 4096
+        ? imageWidth * imageHeight : 0;
+    const bool valid = file[1] == 0 && imageType == 2 &&
+        pixelCount > 0 &&
+        (bytesPerPixel == 3 || bytesPerPixel == 4) &&
+        pixelCount <= rgbaSize / 4 &&
+        dataOffset >= 18 && dataOffset + pixelCount * bytesPerPixel <= length;
+    if (!valid)
+    {
+        gEngfuncs.COM_FreeFile(file);
+        return 0;
+    }
+
+    const bool topOrigin = (file[17] & 0x20) != 0;
+    const byte* pixels = file + dataOffset;
+    for (int y = 0; y < imageHeight; ++y)
+    {
+        const int sourceY = topOrigin ? y : imageHeight - 1 - y;
+        for (int x = 0; x < imageWidth; ++x)
+        {
+            const byte* source = pixels +
+                (sourceY * imageWidth + x) * bytesPerPixel;
+            unsigned char* destination = rgba +
+                (y * imageWidth + x) * 4;
+            destination[0] = source[2];
+            destination[1] = source[1];
+            destination[2] = source[0];
+            destination[3] = bytesPerPixel == 4 ? source[3] : 255;
+        }
+    }
+
+    gEngfuncs.COM_FreeFile(file);
+    if (width) *width = imageWidth;
+    if (height) *height = imageHeight;
+    return 1;
+}
+
 extern "C" int CS16VGUI_LoadResourceLayout(const char* filename,
     cs16_vgui_resource_control_t* controls, int maxControls)
 {
