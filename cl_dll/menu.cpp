@@ -297,7 +297,7 @@ int CHudMenu::MsgFunc_ShowMenu(const char* pszName, int iSize, void* pbuf)
 	return 1;
 }
 
-// Route supported stock CS menu IDs to the native VGUI1 viewport. If a menu is
+// Route supported stock CS menu IDs to the native VGUI2/VGUI1 viewport. If a menu is
 // not implemented yet, switch this session back to ShowMenu instead of leaving
 // the player stuck behind an invisible panel.
 int CHudMenu::MsgFunc_VGUIMenu(const char* pszName, int iSize, void* pbuf)

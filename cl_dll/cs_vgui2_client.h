@@ -1,0 +1,8 @@
+#ifndef CS16_VGUI2_CLIENT_H
+#define CS16_VGUI2_CLIENT_H
+
+#include <IClientVGUI.h>
+
+#define CS16_CLIENTVGUI_INTERFACE_VERSION ICLIENTVGUI_NAME
+
+#endif

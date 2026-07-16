@@ -54,6 +54,11 @@
     <ClCompile Include="cdll_int.cpp" />
     <ClCompile Include="cs_localize.cpp" />
     <ClCompile Include="cs_vgui_bridge.cpp" />
+    <ClCompile Include="cs_vgui2.cpp" />
+    <ClCompile Include="cs_vgui2_client.cpp">
+      <AdditionalIncludeDirectories>$(SolutionDir)external\hl1_source_sdk\common;$(SolutionDir)external\hl1_source_sdk\public;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>MATHLIB_USE_C_ASSERT;NO_MALLOC_OVERRIDE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
     <ClCompile Include="cs_vgui_viewport.cpp" />
     <ClCompile Include="com_weapons.cpp" />
     <ClCompile Include="cs_wpn\cs_weapons.cpp">
@@ -153,6 +158,8 @@
     <ClInclude Include="camera.h" />
     <ClInclude Include="cl_dll.h" />
     <ClInclude Include="cs_vgui.h" />
+    <ClInclude Include="cs_vgui2.h" />
+    <ClInclude Include="cs_vgui2_client.h" />
     <ClInclude Include="cs_localize.h" />
     <ClInclude Include="com_weapons.h" />
     <ClInclude Include="csprite.h" />

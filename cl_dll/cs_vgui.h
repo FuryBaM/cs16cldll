@@ -43,6 +43,11 @@ int CS16VGUI_KeyInput(int down, int keynum, const char* currentBinding);
 int CS16VGUI_LoadResourceLayout(const char* filename,
     cs16_vgui_resource_control_t* controls, int maxControls);
 int CS16VGUI_LocalizeResourceText(const char* text, char* output, int outputSize);
+int CS16VGUI_IsVIPMap(void);
+int CS16VGUI_CanSpectate(void);
+int CS16VGUI_HasTeam(void);
+int CS16VGUI_GetMapName(char* output, int outputSize);
+int CS16VGUI_LoadMapDescription(char* output, int outputSize);
 
 #ifdef __cplusplus
 }

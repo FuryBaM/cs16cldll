@@ -32,6 +32,7 @@
 #include "interface.h" // not used here
 #include "Exports.h"
 #include "cs_vgui.h"
+#include "cs_vgui2.h"
 
 cl_enginefunc_t		gEngfuncs = { };
 CHud gHUD;
@@ -191,6 +192,7 @@ int CL_DLLEXPORT Initialize(cl_enginefunc_t* pEnginefuncs, int iVersion)
 	Game_HookEvents();
 	CS16_StartupTrace("Initialize: events hooked");
 	CL_LoadParticleMan();
+	CS16VGUI2_Startup();
 	CS16_StartupTrace("Initialize: complete");
 	return 1;
 }
@@ -335,6 +337,7 @@ void CL_DLLEXPORT HUD_Init(void)
 	InitInput();
 	CS16_StartupTrace("HUD_Init: input initialized");
 	gHUD.Init();
+	CS16VGUI2_RegisterCommands();
 	CS16VGUI_ResetSession();
 	gEngfuncs.Cvar_SetValue("_vgui_menus", CS16VGUI_IsAvailable() ? 1.0f : 0.0f);
 	CS16_StartupTrace("HUD_Init: complete");
@@ -437,7 +440,7 @@ void CL_DLLEXPORT HUD_Frame(double time)
 	}
 
 #ifdef _CS16CLIENT_ENABLE_GSRC_SUPPORT
-	// Advertise VGUI menus only after the native GoldSrc viewport has attached
+	// Advertise VGUI menus only after a native GoldSrc viewport has attached
 	// successfully. Unsupported menu IDs disable it for the current session and
 	// automatically restore the ShowMenu protocol.
 	const float wantedVguiMenus = CS16VGUI_IsAvailable() ? 1.0f : 0.0f;
@@ -625,7 +628,7 @@ extern "C" void CL_DLLEXPORT F(void* pv)
 	HUD_GetStudioModelInterface,
 	HUD_ChatInputPosition,
 	HUD_GetPlayerTeam,
-	NULL
+	(CLIENTFACTORY)Sys_GetFactoryThis()
 	};
 
 	*pcldll_func = cldll_func;

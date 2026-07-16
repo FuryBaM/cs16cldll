@@ -1009,6 +1009,7 @@ void ShutdownInput (void)
 }
 
 #include "interface.h"
+#include "cs_vgui2.h"
 void CL_UnloadParticleMan( void );
 
 #if defined( _TFC )
@@ -1020,6 +1021,8 @@ void CL_DLLEXPORT HUD_Shutdown( void )
 //	RecClShutdown();
 
 	CS16VGUI_Shutdown();
+	CS16VGUI2_ShutdownViewport();
+	CS16VGUI2_Shutdown();
 	gHUD.Shutdown();
 	ShutdownInput();
 

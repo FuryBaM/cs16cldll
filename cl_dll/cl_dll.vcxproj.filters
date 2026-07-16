@@ -87,6 +87,12 @@
     <ClCompile Include="cs_vgui_bridge.cpp">
       <Filter>Исходные файлы\cl_dll</Filter>
     </ClCompile>
+    <ClCompile Include="cs_vgui2.cpp">
+      <Filter>Исходные файлы\cl_dll</Filter>
+    </ClCompile>
+    <ClCompile Include="cs_vgui2_client.cpp">
+      <Filter>Исходные файлы\cl_dll</Filter>
+    </ClCompile>
     <ClCompile Include="cs_vgui_viewport.cpp">
       <Filter>Исходные файлы\cl_dll</Filter>
     </ClCompile>
@@ -444,6 +450,12 @@
       <Filter>Файлы заголовков\cl_dll</Filter>
     </ClInclude>
     <ClInclude Include="cs_vgui.h">
+      <Filter>Файлы заголовков\cl_dll</Filter>
+    </ClInclude>
+    <ClInclude Include="cs_vgui2.h">
+      <Filter>Файлы заголовков\cl_dll</Filter>
+    </ClInclude>
+    <ClInclude Include="cs_vgui2_client.h">
       <Filter>Файлы заголовков\cl_dll</Filter>
     </ClInclude>
     <ClInclude Include="cs_localize.h">

@@ -5,6 +5,7 @@
 #include "hud.h"
 #include "cl_util.h"
 #include "cs_vgui.h"
+#include "cs_vgui2.h"
 #include "cs_localize.h"
 
 #if defined(_WIN32)
@@ -40,6 +41,14 @@ bool g_vguiCommandsRegistered = false;
 bool g_commandMenuPressed = false;
 float g_commandMenuOpenTime = 0.0f;
 
+bool CS16VGUI_IsEnabledByCvar()
+{
+    cvar_t* enabled = gEngfuncs.pfnGetCvarPointer
+        ? gEngfuncs.pfnGetCvarPointer("cs_vgui_enable")
+        : NULL;
+    return !enabled || enabled->value != 0.0f;
+}
+
 enum
 {
     MAX_COMMAND_MENU_ITEMS = 128,
@@ -50,6 +59,7 @@ enum
 struct CommandMenuItem
 {
     char boundKey;
+    char boundKeyText[16];
     char text[96];
     char displayText[112];
     char command[160];
@@ -151,7 +161,7 @@ int CreateCommandMenuNode(int parentNode)
     return node;
 }
 
-int AddCommandMenuItem(int node, char boundKey, const char* text,
+int AddCommandMenuItem(int node, const char* boundKeyText, const char* text,
     const char* command, const char* mapName, int teamOnly, bool toggle)
 {
     if (node < 0 || node >= g_commandMenuNodeCount ||
@@ -162,7 +172,8 @@ int AddCommandMenuItem(int node, char boundKey, const char* text,
     const int itemIndex = g_commandMenuItemCount++;
     CommandMenuItem& item = g_commandMenuItems[itemIndex];
     memset(&item, 0, sizeof(item));
-    item.boundKey = boundKey;
+    item.boundKey = boundKeyText && boundKeyText[0] ? boundKeyText[0] : 0;
+    CopyCommandMenuText(item.boundKeyText, sizeof(item.boundKeyText), boundKeyText);
     item.parentNode = node;
     item.childNode = -1;
     item.teamOnly = teamOnly;
@@ -179,10 +190,10 @@ int AddCommandMenuItem(int node, char boundKey, const char* text,
 
 void AddFallbackCommandMenu(void)
 {
-    AddCommandMenuItem(0, '1', "CHOOSE TEAM", "chooseteam", NULL, -1, false);
-    AddCommandMenuItem(0, '2', "BUY MENU", "buy", NULL, -1, false);
-    AddCommandMenuItem(0, '3', "MAP BRIEFING", "showbriefing", NULL, -1, false);
-    AddCommandMenuItem(0, '4', "SERVER INFO", "showinfo", NULL, -1, false);
+    AddCommandMenuItem(0, "1", "CHOOSE TEAM", "chooseteam", NULL, -1, false);
+    AddCommandMenuItem(0, "2", "BUY MENU", "buy", NULL, -1, false);
+    AddCommandMenuItem(0, "3", "MAP BRIEFING", "showbriefing", NULL, -1, false);
+    AddCommandMenuItem(0, "4", "SERVER INFO", "showinfo", NULL, -1, false);
 }
 
 void ResetCommandMenuData(void)
@@ -287,7 +298,8 @@ void ParseCommandMenuFile(void)
                 break;
         }
 
-        const char boundKey = token[0];
+        char boundKeyText[16];
+        CopyCommandMenuText(boundKeyText, sizeof(boundKeyText), token);
 
         char text[256];
         cursor = gEngfuncs.COM_ParseFile(cursor, text);
@@ -307,7 +319,7 @@ void ParseCommandMenuFile(void)
         else if (custom && command[0] == '!')
             command[0] = '\0';
 
-        lastItem = AddCommandMenuItem(currentNode, boundKey, text,
+        lastItem = AddCommandMenuItem(currentNode, boundKeyText, text,
             !strcmp(command, "{") ? "" : command,
             mapName, teamOnly, toggle);
 
@@ -527,8 +539,8 @@ extern "C" int CS16VGUI_CommandMenuGetItem(int node, int visibleIndex,
         return 0;
 
     CommandMenuItem& item = g_commandMenuItems[foundItem];
-    snprintf(item.displayText, sizeof(item.displayText), "%c  %s%s",
-        item.boundKey ? item.boundKey : ' ', item.text,
+    snprintf(item.displayText, sizeof(item.displayText), "%s  %s%s",
+        item.boundKeyText[0] ? item.boundKeyText : " ", item.text,
         item.childNode >= 0 ? "  >" : "");
     item.displayText[sizeof(item.displayText) - 1] = '\0';
 
@@ -556,6 +568,81 @@ extern "C" int CS16VGUI_LocalizeResourceText(const char* text, char* output, int
     const char* localized = CS16_Localize(text ? text : "");
     CopyCommandMenuDisplayText(output, outputSize, localized);
     return output[0] != '\0';
+}
+
+extern "C" int CS16VGUI_GetMapName(char* output, int outputSize)
+{
+    if (!output || outputSize <= 0)
+        return 0;
+    output[0] = '\0';
+
+    const char* level = gEngfuncs.pfnGetLevelName
+        ? gEngfuncs.pfnGetLevelName()
+        : NULL;
+    if (!level || !level[0])
+        return 0;
+
+    const char* base = strrchr(level, '/');
+    if (!base)
+        base = strrchr(level, '\\');
+    base = base ? base + 1 : level;
+    CopyCommandMenuText(output, outputSize, base);
+    char* extension = strrchr(output, '.');
+    if (extension)
+        *extension = '\0';
+    return output[0] != '\0';
+}
+
+extern "C" int CS16VGUI_IsVIPMap(void)
+{
+    char mapName[64];
+    return CS16VGUI_GetMapName(mapName, sizeof(mapName)) &&
+        !strnicmp(mapName, "as_", 3);
+}
+
+extern "C" int CS16VGUI_CanSpectate(void)
+{
+    return gHUD.m_Menu.m_bAllowSpec ? 1 : 0;
+}
+
+extern "C" int CS16VGUI_HasTeam(void)
+{
+    return g_iTeamNumber == TEAM_TERRORIST || g_iTeamNumber == TEAM_CT ||
+        g_iTeamNumber == TEAM_SPECTATOR;
+}
+
+extern "C" int CS16VGUI_LoadMapDescription(char* output, int outputSize)
+{
+    if (!output || outputSize <= 0 || !gEngfuncs.COM_LoadFile ||
+        !gEngfuncs.COM_FreeFile)
+        return 0;
+    output[0] = '\0';
+
+    const char* level = gEngfuncs.pfnGetLevelName
+        ? gEngfuncs.pfnGetLevelName()
+        : NULL;
+    if (!level || !level[0])
+        return 0;
+
+    char filename[128];
+    CopyCommandMenuText(filename, sizeof(filename), level);
+    char* extension = strrchr(filename, '.');
+    if (extension)
+        *extension = '\0';
+    strncat(filename, ".txt", sizeof(filename) - strlen(filename) - 1);
+
+    int length = 0;
+    byte* source = gEngfuncs.COM_LoadFile(filename, 5, &length);
+    if (!source)
+        return 0;
+    if (length < 0)
+        length = 0;
+    if (length >= outputSize)
+        length = outputSize - 1;
+    memcpy(output, source, length);
+    output[length] = '\0';
+    gEngfuncs.COM_FreeFile(source);
+    return length > 0;
 }
 
 extern "C" int CS16VGUI_LoadResourceLayout(const char* filename,
@@ -678,6 +765,10 @@ extern "C" void CS16VGUI_ClientCommand(const char* command)
 extern "C" void CS16VGUI_SetMouseVisible(int visible)
 {
     const int next = visible ? 1 : 0;
+    // VGUI1 commandmenu.txt shares the window with the VGUI2 viewport.  The
+    // latter owns GoldSrc's popup list, so keep a non-interactive VGUI2 popup
+    // alive while a legacy menu needs the platform cursor.
+    CS16VGUI2_SetLegacyCursorVisible(next);
     if (g_iVisibleMouse == next)
         return;
 
@@ -787,24 +878,17 @@ extern "C" void CS16VGUI_ResetSession(void)
 
 extern "C" int CS16VGUI_IsAvailable(void)
 {
-    cvar_t* enabled = gEngfuncs.pfnGetCvarPointer
-        ? gEngfuncs.pfnGetCvarPointer("cs_vgui_enable")
-        : NULL;
-    return g_vguiInitialized && !g_vguiDisabledForSession && (!enabled || enabled->value != 0.0f);
+    if (g_vguiDisabledForSession || !CS16VGUI_IsEnabledByCvar())
+        return 0;
+
+    if (CS16VGUI2_IsViewportReady())
+        return 1;
+
+    return g_vguiInitialized;
 }
 
 extern "C" int CS16VGUI_ShowMenu(int menuId)
 {
-#if defined(_CS16CLIENT_ENABLE_VGUI1)
-    if (menuId == 2)
-        CS16_StartupTrace("VGUI1: show team menu enter");
-    else if (menuId == 26)
-        CS16_StartupTrace("VGUI1: show terrorist class menu enter");
-    else if (menuId == 27)
-        CS16_StartupTrace("VGUI1: show counter-terrorist class menu enter");
-    else if (menuId >= 28 && menuId <= 34)
-        CS16_StartupTrace("VGUI1: show buy menu enter");
-
     int team = g_iTeamNumber;
     if (team != TEAM_TERRORIST && team != TEAM_CT)
     {
@@ -812,7 +896,27 @@ extern "C" int CS16VGUI_ShowMenu(int menuId)
         if (player > 0 && player <= MAX_PLAYERS)
             team = g_PlayerExtraInfo[player].teamnumber;
     }
-    CS16VGUI_ImplSetTeam(team == TEAM_CT ? TEAM_CT : TEAM_TERRORIST);
+
+    const int normalizedTeam = team == TEAM_CT ? TEAM_CT : TEAM_TERRORIST;
+    CS16VGUI2_SetTeam(normalizedTeam);
+    if (!g_vguiDisabledForSession && CS16VGUI_IsEnabledByCvar() &&
+        CS16VGUI2_IsViewportReady() && CS16VGUI2_ShowMenu(menuId))
+    {
+        CS16_StartupTrace("VGUI2: show menu complete");
+        return 1;
+    }
+
+#if defined(_CS16CLIENT_ENABLE_VGUI1)
+    if (menuId == 2)
+        CS16_StartupTrace("VGUI1 fallback: show team menu enter");
+    else if (menuId == 26)
+        CS16_StartupTrace("VGUI1 fallback: show terrorist class menu enter");
+    else if (menuId == 27)
+        CS16_StartupTrace("VGUI1 fallback: show counter-terrorist class menu enter");
+    else if (menuId >= 28 && menuId <= 34)
+        CS16_StartupTrace("VGUI1 fallback: show buy menu enter");
+
+    CS16VGUI_ImplSetTeam(normalizedTeam);
 
     if (CS16VGUI_IsAvailable() && CS16VGUI_ImplShowMenu(menuId))
     {
@@ -827,6 +931,7 @@ extern "C" int CS16VGUI_ShowMenu(int menuId)
 
 extern "C" void CS16VGUI_HideMenu(void)
 {
+    CS16VGUI2_HideMenu();
 #if defined(_CS16CLIENT_ENABLE_VGUI1)
     if (g_vguiInitialized)
 	{
@@ -845,6 +950,10 @@ extern "C" void CS16VGUI_DisableForSession(void)
 
 extern "C" int CS16VGUI_KeyInput(int down, int keynum, const char* currentBinding)
 {
+    if (!g_vguiDisabledForSession && CS16VGUI_IsEnabledByCvar() &&
+        CS16VGUI2_KeyInput(down, keynum, currentBinding))
+        return 1;
+
 #if defined(_CS16CLIENT_ENABLE_VGUI1)
     if (CS16VGUI_IsAvailable())
         return CS16VGUI_ImplKeyInput(down, keynum, currentBinding);

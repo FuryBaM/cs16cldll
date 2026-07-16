@@ -80,8 +80,7 @@ enum
     CS_TEAM_T = 1,
     CS_TEAM_CT = 2,
     GOLDSRC_KEY_ESCAPE = 27,
-    MAX_COMMAND_MENU_BUTTONS = 10,
-    COMMAND_MENU_PAGE_SIZE = 8
+    MAX_COMMAND_MENU_BUTTONS = 32
 };
 
 // Match the visual language used by Velaron/cs16-client's active HUD UI:
@@ -407,7 +406,7 @@ protected:
         if (!m_hasTexture) return;
         drawSetColor(255, 255, 255, 0);
         drawSetTexture(m_texture);
-        drawTexturedRect(10, 3, 10 + m_textureWidth, 3 + m_textureHeight);
+        drawTexturedRect(4, 3, 4 + m_textureWidth, 3 + m_textureHeight);
     }
 
 private:
@@ -438,7 +437,7 @@ private:
         }
 
         HGDIOBJ oldBitmap = SelectObject(dc, bitmap);
-        HFONT font = CreateFontW(-LayoutValue(16), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        HFONT font = CreateFontW(-LayoutValue(13), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
             RUSSIAN_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
             ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Tahoma");
         HGDIOBJ oldFont = font ? SelectObject(dc, font) : NULL;
@@ -506,6 +505,11 @@ public:
     }
 
 protected:
+    void HideTitle()
+    {
+        m_title->setVisible(false);
+    }
+
     void AddButton(CCSViewport* viewport, const char* text, int y,
         const char* command, int targetMenu, int tall = 30)
     {
@@ -759,13 +763,13 @@ public:
 class CCommandMenuPanel final : public CCSMenuPanel
 {
 public:
-    CCommandMenuPanel(CCSViewport* viewport) : CCSMenuPanel("COMMAND MENU", 90)
+    CCommandMenuPanel(CCSViewport* viewport) : CCSMenuPanel("", 90, 220)
     {
+        HideTitle();
         for (int i = 0; i < MAX_COMMAND_MENU_BUTTONS; ++i)
         {
             CUnicodeCommandButton* button = new CUnicodeCommandButton(
-                LayoutValue(20), LayoutValue(48 + i * 30),
-                LayoutValue(320), LayoutValue(27));
+                0, LayoutValue(i * 29), LayoutValue(220), LayoutValue(30));
             button->setParent(this);
             button->addActionSignal(new CCommandSlotSignal(viewport, i));
             button->setVisible(false);
@@ -775,45 +779,30 @@ public:
 
     bool Refresh(int node, int page)
     {
+        (void)page;
         CS16VGUI_Trace("VGUI1: command menu refresh enter");
         const int count = CS16VGUI_CommandMenuGetCount(node);
-        const int pageCount = count > 0 ? (count + COMMAND_MENU_PAGE_SIZE - 1) / COMMAND_MENU_PAGE_SIZE : 1;
-        if (page < 0) page = 0;
-        if (page >= pageCount) page = pageCount - 1;
-        const int first = page * COMMAND_MENU_PAGE_SIZE;
-        int rows = count - first;
-        if (rows > COMMAND_MENU_PAGE_SIZE) rows = COMMAND_MENU_PAGE_SIZE;
-        if (rows < 0) rows = 0;
+        int rows = count;
+        if (rows > MAX_COMMAND_MENU_BUTTONS)
+            rows = MAX_COMMAND_MENU_BUTTONS;
 
         for (int i = 0; i < rows; ++i)
         {
             const char* display = 0;
-            if (!CS16VGUI_CommandMenuGetItem(node, first + i, &display, 0, 0, 0))
+            if (!CS16VGUI_CommandMenuGetItem(node, i, &display, 0, 0, 0))
             {
                 m_buttons[i]->setVisible(false);
                 continue;
             }
-            char numbered[320];
-            _snprintf(numbered, sizeof(numbered), "%d  %s", i + 1, display ? display : "");
-            numbered[sizeof(numbered) - 1] = 0;
-            m_buttons[i]->SetUtf8Text(numbered);
+            // display already starts with the exact key from commandmenu.txt.
+            m_buttons[i]->SetUtf8Text(display ? display : "");
             m_buttons[i]->setVisible(true);
         }
-        for (int i = rows; i < COMMAND_MENU_PAGE_SIZE; ++i) m_buttons[i]->setVisible(false);
-
-        if (page + 1 < pageCount)
-        {
-            m_buttons[8]->SetUtf8Text("9  NEXT");
-            m_buttons[8]->setVisible(true);
-        }
-        else m_buttons[8]->setVisible(false);
-
-        const int parent = CS16VGUI_CommandMenuGetParent(node);
-        m_buttons[9]->SetUtf8Text(parent >= 0 || page > 0 ? "0  BACK" : "0  CLOSE");
-        m_buttons[9]->setVisible(true);
-        setSize(LayoutValue(360), LayoutValue(58 + MAX_COMMAND_MENU_BUTTONS * 30));
+        for (int i = rows; i < MAX_COMMAND_MENU_BUTTONS; ++i)
+            m_buttons[i]->setVisible(false);
+        setSize(LayoutValue(220), LayoutValue(rows > 0 ? rows * 29 + 1 : 30));
         CS16VGUI_Trace("VGUI1: command menu refresh complete");
-        return count > 0 || parent >= 0;
+        return count > 0 || CS16VGUI_CommandMenuGetParent(node) >= 0;
     }
 private:
     CUnicodeCommandButton* m_buttons[MAX_COMMAND_MENU_BUTTONS];
@@ -906,25 +895,9 @@ public:
     {
         if (m_currentMenu != CS_MENU_COMMAND || slot < 0) return;
         const int count = CS16VGUI_CommandMenuGetCount(m_commandNode);
-        const int first = m_commandPage * COMMAND_MENU_PAGE_SIZE;
-        const int parent = CS16VGUI_CommandMenuGetParent(m_commandNode);
-        if (slot == 8)
-        {
-            if (first + COMMAND_MENU_PAGE_SIZE < count)
-                ShowCommandNode(m_commandNode, m_commandPage + 1);
-            return;
-        }
-        if (slot == 9)
-        {
-            if (m_commandPage > 0) ShowCommandNode(m_commandNode, m_commandPage - 1);
-            else if (parent >= 0) ShowCommandNode(parent, 0);
-            else HideMenu();
-            return;
-        }
-        const int visibleIndex = first + slot;
-        if (slot >= COMMAND_MENU_PAGE_SIZE || visibleIndex >= count) return;
+        if (slot >= count || slot >= MAX_COMMAND_MENU_BUTTONS) return;
         int itemIndex = -1, childNode = -1;
-        if (!CS16VGUI_CommandMenuGetItem(m_commandNode, visibleIndex, 0, &itemIndex, &childNode, 0)) return;
+        if (!CS16VGUI_CommandMenuGetItem(m_commandNode, slot, 0, &itemIndex, &childNode, 0)) return;
         if (childNode >= 0) { ShowCommandNode(childNode, 0); return; }
         HideMenu(); CS16VGUI_CommandMenuExecute(itemIndex);
     }
@@ -935,9 +908,17 @@ public:
         if (keynum == GOLDSRC_KEY_ESCAPE) { PerformAction(0, 0); return 1; }
         if (m_currentMenu == CS_MENU_COMMAND)
         {
-            if (keynum >= '1' && keynum <= '8') { PerformCommandSlot(keynum - '1'); return 1; }
-            if (keynum == '9') { PerformCommandSlot(8); return 1; }
-            if (keynum == '0') { PerformCommandSlot(9); return 1; }
+            const int count = CS16VGUI_CommandMenuGetCount(m_commandNode);
+            for (int i = 0; i < count && i < MAX_COMMAND_MENU_BUTTONS; ++i)
+            {
+                int boundKey = 0;
+                if (CS16VGUI_CommandMenuGetItem(m_commandNode, i, 0, 0, 0,
+                    &boundKey) && boundKey == keynum)
+                {
+                    PerformCommandSlot(i);
+                    return 1;
+                }
+            }
             return 0;
         }
         if (m_currentMenu == CS_MENU_TEAM)
@@ -1017,7 +998,8 @@ private:
         for (int i = 0; i < m_panelCount; ++i)
         {
             int wide = 0, tall = 0; m_panels[i]->getSize(wide, tall);
-            if (m_panels[i] == m_commandMenu) { int y = (m_height - tall) / 3; if (y < LayoutValue(48)) y = LayoutValue(48); m_panels[i]->setPos(LayoutValue(20), y); }
+            if (m_panels[i] == m_commandMenu)
+                m_panels[i]->setPos(0, LayoutValue(120));
             else
             {
                 int resourceX = 0, resourceY = 0;
