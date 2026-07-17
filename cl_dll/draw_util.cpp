@@ -158,41 +158,49 @@ int DrawUtils::DrawHudStringReverse(int xpos, int ypos, int /*iMinX*/, const cha
 int DrawUtils::DrawHudNumber2(int x, int y, bool DrawZero, int iDigits, int iNumber,
     int r, int g, int b)
 {
-    // Формирование числа по флагам
-    // Если число 0 и DrawZero=false, ничего не рисуем.
-    if (iNumber == 0 && !DrawZero && iDigits <= 0)
+    // CS ships the HUD digits as number_0..number_9 entries in
+    // cstrike/sprites/hud.txt. Draw the field from right to left so money,
+    // the round timer and the rest of the HUD use those original glyphs.
+    const int digitWidth = gHUD.GetSpriteRect(gHUD.m_HUD_number_0).Width();
+    if (digitWidth <= 0 || iDigits <= 0)
         return x;
 
-    char buf[32];
-    if (iDigits > 0)
-        std::snprintf(buf, sizeof(buf), "%0*d", iDigits, iNumber);
-    else
-        std::snprintf(buf, sizeof(buf), "%d", iNumber);
+    iNumber = abs(iNumber);
+    int digitX = x + (iDigits - 1) * digitWidth;
+    const int resultX = digitX + digitWidth;
 
-    SetTextColor255(r, g, b);
-    DrawTextXY(x, y, buf);
-    return x + StringWidth(buf);
+    do
+    {
+        const int digit = iNumber % 10;
+        iNumber /= 10;
+        SPR_Set(gHUD.GetSprite(gHUD.m_HUD_number_0 + digit), r, g, b);
+        SPR_DrawAdditive(0, digitX, y,
+            &gHUD.GetSpriteRect(gHUD.m_HUD_number_0 + digit));
+        digitX -= digitWidth;
+        --iDigits;
+    }
+    while (iNumber > 0 || (iDigits > 0 && DrawZero));
+
+    return resultX;
 }
 
 int DrawUtils::DrawHudNumber2(int x, int y, int iNumber, int r, int g, int b)
 {
-    char buf[32];
-    std::snprintf(buf, sizeof(buf), "%d", iNumber);
-    SetTextColor255(r, g, b);
-    DrawTextXY(x, y, buf);
-    return x + StringWidth(buf);
+    int value = abs(iNumber);
+    int digits = 1;
+    for (int remaining = value; remaining >= 10; remaining /= 10)
+        ++digits;
+
+    return DrawHudNumber2(x, y, false, digits, value, r, g, b);
 }
 
 int DrawUtils::DrawHudNumber(int x, int y, int iFlags, int iNumber,
     int r, int g, int b)
 {
-    // Поддержка DHN_DRAWZERO / DHN_2DIGITS / DHN_3DIGITS
-    const bool drawZero = (iFlags & DHN_DRAWZERO) != 0;
-    int digits = 0;
-    if (iFlags & DHN_3DIGITS) digits = 3;
-    else if (iFlags & DHN_2DIGITS) digits = 2;
-
-    return DrawHudNumber2(x, y, drawZero, digits, iNumber, r, g, b);
+    // Keep the classic DHN layout (blank leading positions, not zeroes) used
+    // by health, armor and ammo. CHud renders it with the same cstrike sprite
+    // set loaded during VidInit.
+    return gHUD.DrawHudNumber(x, y, iFlags, iNumber, r, g, b);
 }
 
 // Простейшие 2D-примитивы через TriAPI

@@ -21,6 +21,7 @@
 #include "cl_util.h"
 #include "parsemsg.h"
 #include "cs_vgui.h"
+#include "draw_util.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -165,6 +166,17 @@ int CHudMenu::Draw(float flTime)
 	}
 
 	int nFontHeight = max(12, screenInfo.iCharHeight);
+	// ShowMenu text is split into chunks at color escape sequences. Without
+	// this line-wide decision, ASCII slot numbers use GoldSrc's bitmap font
+	// while the Cyrillic part of the same line uses the VGUI2 EngineFont.
+	// Keep every chunk on one font whenever the menu needs Unicode rendering.
+	const bool useUnicodeFont = CS16_HudTextNeedsUnicode(g_szMenuString);
+	if (useUnicodeFont)
+	{
+		int fontWide = 0, fontTall = 0;
+		if (CS16VGUI2_GetHudStringSize("0", &fontWide, &fontTall))
+			nFontHeight = max(nFontHeight, fontTall);
+	}
 
 	// center it
 	int y = (ScreenHeight / 2) - ((nlc / 2) * nFontHeight) - (3 * nFontHeight + nFontHeight / 3); // make sure it is above the say text
@@ -201,15 +213,48 @@ int CHudMenu::Draw(float flTime)
 			}
 			strncpy(menubuf, ptr, min((sptr - ptr), (int)sizeof(menubuf)));
 			menubuf[min((sptr - ptr), (int)(sizeof(menubuf) - 1))] = '\0';
+			char converted[256];
+			const char* menuText = useUnicodeFont
+				? CS16_LegacyHudText(menubuf, converted, sizeof(converted))
+				: menubuf;
 
 			if (menu_ralign)
 			{
 				// IMPORTANT: Right-to-left rendered text does not parse escape tokens!
-				menu_x = gHUD.DrawHudStringReverse(menu_x, y, 0, menubuf, menu_r, menu_g, menu_b);
+				if (useUnicodeFont)
+				{
+					int wide = 0, tall = 0;
+					if (CS16VGUI2_GetHudStringSize(menuText, &wide, &tall) &&
+						CS16VGUI2_DrawHudString(menu_x - wide, y, menuText,
+							menu_r, menu_g, menu_b, 255) >= 0)
+						menu_x -= wide;
+					else
+						menu_x = gHUD.DrawHudStringReverse(menu_x, y, 0,
+							menubuf, menu_r, menu_g, menu_b);
+				}
+				else
+				{
+					menu_x = gHUD.DrawHudStringReverse(menu_x, y, 0,
+						menubuf, menu_r, menu_g, menu_b);
+				}
 			}
 			else
 			{
-				menu_x = gHUD.DrawHudString(menu_x, y, 320, menubuf, menu_r, menu_g, menu_b);
+				if (useUnicodeFont)
+				{
+					const int wide = CS16VGUI2_DrawHudString(menu_x, y,
+						menuText, menu_r, menu_g, menu_b, 255);
+					if (wide >= 0)
+						menu_x += wide;
+					else
+						menu_x = gHUD.DrawHudString(menu_x, y, 320,
+							menubuf, menu_r, menu_g, menu_b);
+				}
+				else
+				{
+					menu_x = gHUD.DrawHudString(menu_x, y, 320,
+						menubuf, menu_r, menu_g, menu_b);
+				}
 			}
 		}
 	}

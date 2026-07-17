@@ -885,7 +885,10 @@ private:
         {
             m_hudFont = m_surface->CreateFont();
             if (m_hudFont != vgui2::INVALID_FONT)
-                m_surface->AddGlyphSetToFont(m_hudFont, "Verdana", 12, 500, 0, 0,
+                // TrackerScheme.res: DefaultSmall. This is the smoother face
+                // already used for localized HUD text; ShowMenu forces its
+                // ASCII slot numbers through this font as well.
+                m_surface->AddGlyphSetToFont(m_hudFont, "Tahoma", 13, 0, 0, 0,
                     vgui2::ISurface::FONTFLAG_ANTIALIAS |
                     vgui2::ISurface::FONTFLAG_ADDITIVE, 0x0000, 0x04ff);
         }
@@ -893,21 +896,26 @@ private:
         {
             m_font = m_surface->CreateFont();
             if (m_font != vgui2::INVALID_FONT)
-                m_surface->AddGlyphSetToFont(m_font, "Verdana", 12, 500, 0, 0,
+                // TrackerScheme.res: Default.
+                m_surface->AddGlyphSetToFont(m_font, "Tahoma", 16, 0, 0, 0,
                     vgui2::ISurface::FONTFLAG_ANTIALIAS, 0x0000, 0x04ff);
         }
         if (m_titleFont == vgui2::INVALID_FONT)
         {
             m_titleFont = m_surface->CreateFont();
             if (m_titleFont != vgui2::INVALID_FONT)
-                m_surface->AddGlyphSetToFont(m_titleFont, "Verdana Bold", 18, 500, 0, 0,
-                vgui2::ISurface::FONTFLAG_ANTIALIAS, 0x0000, 0x04ff);
+                // TrackerScheme.res: MenuLarge at the base 480-line layout.
+                m_surface->AddGlyphSetToFont(m_titleFont, "Verdana", 18, 700, 0, 0,
+                    vgui2::ISurface::FONTFLAG_ANTIALIAS |
+                    vgui2::ISurface::FONTFLAG_DROPSHADOW |
+                    vgui2::ISurface::FONTFLAG_OUTLINE, 0x0000, 0x04ff);
         }
         if (m_infoFont == vgui2::INVALID_FONT)
         {
             m_infoFont = m_surface->CreateFont();
             if (m_infoFont != vgui2::INVALID_FONT)
-                m_surface->AddGlyphSetToFont(m_infoFont, "Verdana", 12, 500, 0, 0,
+                // TrackerScheme.res: DefaultSmall.
+                m_surface->AddGlyphSetToFont(m_infoFont, "Tahoma", 13, 0, 0, 0,
                     vgui2::ISurface::FONTFLAG_ANTIALIAS, 0x0000, 0x04ff);
         }
     }
@@ -1746,12 +1754,34 @@ private:
         m_surface->DrawSetColor(188, 112, 0, 150);
         m_surface->DrawOutlinedRect(boxX0, boxY0, boxX1, boxY1);
 
-        const int drawWide = ScaleX(m_previewWide);
-        const int drawTall = ScaleY(m_previewTall);
+        int drawWide = ScaleX(m_previewWide);
+        int drawTall = ScaleY(m_previewTall);
+
+        // Weapon preview TGAs do not share one aspect ratio. In particular,
+        // the pistol images are much taller than the rifle images, so drawing
+        // every asset at its native UI size lets the grip cross the bottom
+        // edge of the fixed-height ItemInfo box. Preserve the existing size
+        // when it fits, otherwise scale both dimensions down to the padded
+        // interior of the frame.
+        const int paddingX = ScaleX(6);
+        const int paddingY = ScaleY(6);
+        const int availableWide = max(1, boxX1 - boxX0 - paddingX * 2);
+        const int availableTall = max(1, boxY1 - boxY0 - paddingY * 2);
+        float previewScale = 1.0f;
+        if (drawWide > availableWide)
+            previewScale = min(previewScale,
+                availableWide / (float)drawWide);
+        if (drawTall > availableTall)
+            previewScale = min(previewScale,
+                availableTall / (float)drawTall);
+        if (previewScale < 1.0f)
+        {
+            drawWide = max(1, (int)(drawWide * previewScale + 0.5f));
+            drawTall = max(1, (int)(drawTall * previewScale + 0.5f));
+        }
+
         int imageX = boxX0 + (boxX1 - boxX0 - drawWide) / 2;
         int imageY = boxY0 + (boxY1 - boxY0 - drawTall) / 2;
-        if (imageX < boxX0) imageX = boxX0;
-        if (imageY < boxY0) imageY = boxY0;
         if (m_previewTexture && drawWide > 0 && drawTall > 0)
         {
             m_surface->DrawSetColor(255, 255, 255, 255);

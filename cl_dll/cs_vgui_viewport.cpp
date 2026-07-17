@@ -56,12 +56,19 @@ static int LayoutValue(int value)
 
 static vgui::Font* MenuButtonFont()
 {
-    // The stock App scheme's sf_primary3 is the compact command-menu font.
-    // At a widescreen HUD scale it becomes much smaller than the 20-pixel
-    // button rows described by the Counter-Strike VGUI2 .res files.
-    static vgui::Font* font = new vgui::Font("Tahoma", LayoutValue(18), 0,
-        0.0f, 500, false, false, false, false);
-    return font;
+    // Prefer the font supplied by cstrike's active VGUI scheme. The fallback
+    // mirrors TrackerScheme.res:Default and is only needed on engines that do
+    // not expose an initialized App scheme here.
+    vgui::App* app = vgui::App::getInstance();
+    vgui::Scheme* scheme = app ? app->getScheme() : NULL;
+    vgui::Font* schemeFont = scheme
+        ? scheme->getFont(vgui::Scheme::sf_primary3) : NULL;
+    if (schemeFont)
+        return schemeFont;
+
+    static vgui::Font* fallback = new vgui::Font("Tahoma", LayoutValue(16), 0,
+        0.0f, 0, false, false, false, false);
+    return fallback;
 }
 
 enum
