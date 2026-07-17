@@ -3,6 +3,7 @@
 #include "parsemsg.h"
 #include "r_efx.h"
 #include "entity_types.h"
+#include "draw_util.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -123,6 +124,9 @@ int CVoiceStatus::Init(IVoiceStatusHelper *helper)
 
 int CVoiceStatus::VidInit()
 {
+	m_VoicePlayers.Init();
+	m_Talking = false;
+	m_ServerAcked = false;
 	m_VoiceHeadModelHeight = 45.0f;
 	char *file = (char *)gEngfuncs.COM_LoadFile("scripts/voicemodel.txt", 5, NULL);
 	if (file)
@@ -135,6 +139,72 @@ int CVoiceStatus::VidInit()
 	}
 
 	m_VoiceHeadModel = gEngfuncs.pfnSPR_Load("sprites/voiceicon.spr");
+	return 1;
+}
+
+int CVoiceStatus::Draw(float)
+{
+	if (!m_pHelper || !m_pHelper->CanShowSpeakerLabels())
+		return 1;
+
+	if (gHUD.m_iHideHUDDisplay & HIDEHUD_ALL)
+		return 1;
+
+	const int iconWidth = m_VoiceHeadModel ? SPR_Width(m_VoiceHeadModel) : 0;
+	const int iconHeight = m_VoiceHeadModel ? SPR_Height(m_VoiceHeadModel) : 0;
+	const int rowHeight = max(max(iconHeight, gHUD.m_iFontHeight), 16) + 4;
+	const int iconGap = iconWidth ? 4 : 0;
+	cl_entity_t *localPlayer = gEngfuncs.GetLocalPlayer();
+	const int localIndex = localPlayer ? localPlayer->index : 0;
+	int y = ScreenHeight / 2;
+
+	for (int clientIndex = 0; clientIndex < VOICE_MAX_PLAYERS; ++clientIndex)
+	{
+		if (!m_VoicePlayers[clientIndex])
+			continue;
+
+		const int playerIndex = clientIndex + 1;
+		if (playerIndex == localIndex || playerIndex > gEngfuncs.GetMaxClients())
+			continue;
+
+		hud_player_info_t info;
+		memset(&info, 0, sizeof(info));
+		gEngfuncs.pfnGetPlayerInfo(playerIndex, &info);
+		if (!info.name || !info.name[0])
+			continue;
+
+		int teamColor[3] = { 255, 255, 255 };
+		m_pHelper->GetPlayerTextColor(playerIndex, teamColor);
+
+		const int textWidth = DrawUtils::HudStringLen(info.name);
+		const int rowWidth = 4 + iconWidth + iconGap + textWidth + 6;
+		const int x = max(0, ScreenWidth - rowWidth - 8);
+
+		FillRGBA(x, y, rowWidth, rowHeight,
+			teamColor[0], teamColor[1], teamColor[2], 180);
+
+		if (m_VoiceHeadModel)
+		{
+			SPR_Set(m_VoiceHeadModel, 255, 255, 255);
+			SPR_DrawAdditive(0, x + 2, y + (rowHeight - iconHeight) / 2, NULL);
+		}
+
+		DrawUtils::DrawHudString(x + 4 + iconWidth + iconGap,
+			y + (rowHeight - gHUD.m_iFontHeight) / 2,
+			ScreenWidth - 8, info.name, 255, 255, 255);
+		y += rowHeight + 2;
+	}
+
+	// Match the original voice acknowledgement: while the local microphone is
+	// active, keep a small icon above the lower-right HUD counters.
+	if (m_Talking && m_VoiceHeadModel)
+	{
+		const int x = ScreenWidth - iconWidth - 10;
+		const int y = ScreenHeight - m_pHelper->GetAckIconHeight() - iconHeight;
+		SPR_Set(m_VoiceHeadModel, 255, 255, 255);
+		SPR_DrawAdditive(0, x, y, NULL);
+	}
+
 	return 1;
 }
 
