@@ -6,6 +6,34 @@
 Velaron/cs16-client. Это не сборка для Xash3D: активные Xash/mobile/render API
 не используются.
 
+## Почему этот проект уникален
+
+> **Это единственный клиент, который компилируется под оригинальный Steam GoldSrc
+> и работает на серверах без вылетов.**
+
+Проект не просто собирает старый HLSDK-код современным компилятором. Он сохраняет
+контракт оригинального 32-битного Steam GoldSrc и одновременно возвращает
+Counter-Strike-специфичную клиентскую логику:
+
+- **Нативный Steam GoldSrc ABI.** Результат — PE32/x86 `client.dll` с полной
+  таблицей из 44 экспортов, ожидаемых движком, без зависимости от `xash.dll`,
+  `mainui.dll` или мобильных API.
+- **Оригинальный VGUI.** Клиент использует поставляемые Steam библиотеки
+  `vgui.dll` и `vgui2.dll`, оригинальные ресурсы CS 1.6 и совместимый VGUI1
+  fallback. Интерфейс не заменён Xash-реализацией.
+- **Рабочий prediction.** Shared-weapon код выполняется через штатный
+  `HUD_PostRunCmd`; клиентский адаптер отделяет prediction от серверных
+  `PRECACHE_*`/`SET_MODEL` callback и не вызывает отсутствующие функции движка.
+- **Стабильный мультиплеер.** Исправлены lifecycle, таблицы callback, границы
+  индексов игроков, prediction, scoreboard, spectator HUD и voice HUD. Клиент
+  проходит реальные игровые smoke-тесты: подключение, spawn, покупка, стрельба,
+  смена оружия, смерть, наблюдение и голосовая связь.
+
+Многие старые проекты ориентированы на Xash3D, mobile/render API либо содержат
+только базовый Half-Life `cl_dll`. Здесь целевой движок — именно оригинальный
+Steam GoldSrc, сохранён оригинальный CS VGUI, восстановлен weapon prediction и
+проверена полноценная сетевая сессия, а не только запуск локальной карты.
+
 ## Что изменено
 
 - цель сборки ограничена Windows x86, как требует Steam GoldSrc;
@@ -65,21 +93,74 @@ vtable ABI несовместим с MinGW. VGUI1 является отдель�
 Сейчас VGUI2 покрывает выбор команды, модели и покупку. VGUI1 остаётся для
 `commandmenu.txt` и как запасной viewport. Радио и остальные ещё не перенесённые
 menu ID автоматически остаются в классическом текстовом виде.
-Голос работает, но отдельные VGUI-плашки с именем говорящего пока отсутствуют.
+Голосовой HUD показывает имя говорящего игрока и использует штатный voice status.
 Используется штатный `vgui.dll`, уже поставляемый Steam GoldSrc; копировать
 версию этой библиотеки из Xash3D в папку игры нельзя.
 
 ## Сборка
 
-Нужны Visual Studio 2022 и workload **Desktop development with C++**.
+### 1. Что установить
+
+- Windows 10 или Windows 11;
+- **Visual Studio Community 2026** (18.x);
+- workload **Desktop development with C++**;
+- компоненты **MSVC v145 C++ x64/x86 build tools** и **Windows 10/11 SDK**;
+- Git for Windows.
+
+Отдельно скачивать HLSDK, SDL2 или VGUI SDK не нужно: используемые заголовки,
+`SDL2.lib` и импортная библиотека VGUI уже находятся в репозитории. Установленная
+через Steam Counter-Strike 1.6 нужна только для запуска и проверки DLL.
+
+### 2. Получить исходники
+
+```powershell
+git clone https://github.com/FuryBaM/cs16-goldsrc-client.git
+cd cs16-goldsrc-client
+```
+
+### 3. Собрать Release DLL
+
+Откройте **Developer PowerShell for VS 2026** и выполните:
 
 ```powershell
 msbuild .\cs16cldll.sln /m /p:Configuration=Release /p:Platform=x86
-.\scripts\verify-client.ps1 -Path .\build\Release\client.dll
+powershell -ExecutionPolicy Bypass -File .\scripts\verify-client.ps1 `
+  -Path .\build\Release\client.dll
 ```
 
-Готовый файл появится в `build/Release/client.dll`. Release использует
-статический MSVC runtime; `SDL2.dll` берётся из установленного Steam GoldSrc.
+Либо откройте `cs16cldll.sln` в Visual Studio, выберите **Release** и **x86**, затем
+выполните **Build → Build Solution**. Готовый файл появится в
+`build/Release/client.dll`.
+
+Скрипт проверки подтверждает, что файл имеет формат PE32/x86, содержит все 44
+GoldSrc-экспорта и не импортирует библиотеки Xash3D. Release использует
+статический MSVC runtime; `SDL2.dll` и `vgui.dll` берутся из установленного
+Steam GoldSrc.
+
+### 4. Запустить собранную DLL
+
+1. Закройте Counter-Strike 1.6.
+2. Найдите папку игры: Steam → Counter-Strike → **Properties** →
+   **Installed Files** → **Browse**.
+3. Сделайте резервную копию `cstrike/cl_dlls/client.dll`.
+4. Скопируйте `build/Release/client.dll` в `cstrike/cl_dlls/client.dll` с заменой.
+5. Добавьте параметры запуска `-insecure -dev -console`.
+6. Запустите игру и сначала проверьте DLL локально командой `map de_dust2`.
+
+`-insecure` обязателен при разработке и тестировании изменённого клиентского
+модуля. Не подключайтесь с этой DLL к VAC-secured серверам.
+
+### Частые ошибки сборки
+
+- **MSB8020 / не найден v145:** установите Visual Studio 2026 и компонент
+  **MSVC v145 C++ x64/x86 build tools**.
+- **Не найден Windows SDK:** добавьте Windows 10 или Windows 11 SDK через
+  Visual Studio Installer → **Individual components**.
+- **Собирается не та архитектура:** используйте только `Platform=x86`; Steam
+  GoldSrc не загрузит 64-битную клиентскую DLL.
+- **DLL не удаётся заменить:** полностью закройте игру перед копированием.
+- **При запуске отсутствует SDL2.dll или vgui.dll:** проверьте файлы игры через
+  Steam; не копируйте эти библиотеки из Xash3D.
 
 Заголовки VGUI2 размещены в `external/hl1_source_sdk`; рядом сохранены
 лицензия Source 1 SDK и `thirdpartylegalnotices.txt`.
