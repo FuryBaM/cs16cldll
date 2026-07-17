@@ -166,6 +166,7 @@ public:
 	static int ScaleForRes( float value, int height );
 	float GetCrosshairGap( int weaponId );
 	void DrawCrosshair( int weaponId );
+	const WEAPON* GetCurrentWeapon() const { return m_pWeapon; }
 	static int GetWeaponAccuracyFlags( int weaponId );
 	void DrawCrosshairSection( int _x0, int _y0, int _x1, int _y1 );
 	void DrawCrosshairPadding( int _pad, int _x0, int _y0, int _x1, int _y1 );
@@ -559,6 +560,7 @@ public:
 	int Draw(float flTime);
 	CHudMsgFunc(Battery);
 	CHudMsgFunc(ArmorType);
+	int GetArmor() const { return m_iBat; }
 	
 private:
 	enum armortype_t {
