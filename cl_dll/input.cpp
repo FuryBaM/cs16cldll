@@ -21,6 +21,8 @@ extern "C"
 #include <ctype.h>
 #include "Exports.h"
 #include "cs_vgui.h"
+#include "platform/steam_integration.h"
+#include "platform/discord_rpc.h"
 
 
 extern int g_iAlive;
@@ -1021,6 +1023,8 @@ void CL_DLLEXPORT HUD_Shutdown( void )
 {
 //	RecClShutdown();
 
+	CS16Discord_Shutdown();
+	CS16Steam_Shutdown();
 	CS16VGUI_Shutdown();
 	CS16VGUI2_ShutdownViewport();
 	CS16VGUI2_Shutdown();

@@ -28,6 +28,7 @@
 #include <string.h>
 #include <stdio.h>
 #include "draw_util.h"
+#include "platform/steam_integration.h"
 
 hud_player_info_t   g_PlayerInfoList[MAX_PLAYERS+1]; // player info from the engine
 extra_player_info_t	g_PlayerExtraInfo[MAX_PLAYERS+1]; // additional player info sent directly to the client dll
@@ -141,8 +142,16 @@ bool CHudScoreboard :: ShouldDrawScoreboard() const
 	return false;
 }
 
-// Y positions
-#define ROW_GAP  15
+// Keep the classic compact layout at low resolutions, but give Steam avatars
+// and player names enough room on modern displays.
+inline int ScoreRowGap()
+{
+	if( ScreenHeight >= 1000 )
+		return 22;
+	if( ScreenHeight >= 720 )
+		return 19;
+	return 15;
+}
 
 int CHudScoreboard :: Draw( float flTime )
 {
@@ -185,7 +194,7 @@ int CHudScoreboard :: DrawScoreboard( float fTime )
 	DrawUtils::DrawRectangle(xstart, ystart, xend - xstart, yend - ystart,
 		m_colors.r, m_colors.g, m_colors.b, m_colors.a, m_bDrawStroke);
 
-	int ypos = ystart + (list_slot * ROW_GAP) + 5;
+	int ypos = ystart + (list_slot * ScoreRowGap()) + 5;
 
 	if( gHUD.m_szServerName[0] )
 		snprintf( ServerName, 80, "%s SERVER: %s", (char*)(gHUD.m_Teamplay ? "TEAMS" : "PLAYERS"), gHUD.m_szServerName );
@@ -200,7 +209,7 @@ int CHudScoreboard :: DrawScoreboard( float fTime )
 	DrawUtils::DrawHudStringReverse( PING_POS_END(), ypos, PING_POS_START(), "PING", 255, 140, 0 );
 
 	list_slot += 2;
-	ypos = ystart + (list_slot * ROW_GAP);
+	ypos = ystart + (list_slot * ScoreRowGap());
 	FillRGBA( xstart, ypos, xend - xstart, 1, 255, 140, 0, 255);  // draw the separator line
 	
 	list_slot += 0.8;
@@ -220,7 +229,7 @@ int CHudScoreboard :: DrawScoreboard( float fTime )
 int CHudScoreboard :: DrawTeams( float list_slot )
 {
 	int j;
-	int ypos = ystart + (list_slot * ROW_GAP) + 5;
+	int ypos = ystart + (list_slot * ScoreRowGap()) + 5;
 
 	// clear out team scores
 	for ( int i = 1; i <= m_iNumTeams; i++ )
@@ -313,7 +322,7 @@ int CHudScoreboard :: DrawTeams( float list_slot )
 		if ( team_info->players <= 0 )
 			continue;
 
-		ypos = ystart + (list_slot * ROW_GAP);
+		ypos = ystart + (list_slot * ScoreRowGap());
 
 		// check we haven't drawn too far down
 		if ( ypos > yend )  // don't draw to close to the lower border
@@ -346,7 +355,7 @@ int CHudScoreboard :: DrawTeams( float list_slot )
 
 		// draw underline
 		list_slot += 1.2f;
-		FillRGBA( xstart, ystart + (list_slot * ROW_GAP), xend - xstart, 1, r, g, b, 255);
+		FillRGBA( xstart, ystart + (list_slot * ScoreRowGap()), xend - xstart, 1, r, g, b, 255);
 
 		list_slot += 0.4f;
 		// draw all the players that belong to this team, indented slightly
@@ -393,7 +402,7 @@ int CHudScoreboard :: DrawPlayers( float list_slot, int nameoffset, const char *
 		// draw out the best player
 		hud_player_info_t *pl_info = &g_PlayerInfoList[best_player];
 
-		int ypos = ystart + (list_slot * ROW_GAP);
+		int ypos = ystart + (list_slot * ScoreRowGap());
 
 		// check we haven't drawn too far down
 		if ( ypos > yend )  // don't draw to close to the lower border
@@ -404,13 +413,32 @@ int CHudScoreboard :: DrawPlayers( float list_slot, int nameoffset, const char *
 		r *= colors[0];
 		g *= colors[1];
 		b *= colors[2];
+		const bool isDead = g_PlayerExtraInfo[best_player].dead;
+		if( isDead )
+		{
+			r = max( 35, (int)(r * 0.42f) );
+			g = max( 35, (int)(g * 0.42f) );
+			b = max( 35, (int)(b * 0.42f) );
+		}
 
 		if(pl_info->thisplayer) // hey, it's me!
 		{
-			FillRGBABlend( xstart, ypos, xend - xstart, ROW_GAP, 255, 255, 255, 15 );
+			FillRGBABlend( xstart, ypos, xend - xstart, ScoreRowGap(),
+				255, 255, 255, isDead ? 7 : 15 );
 		}
 
-		DrawUtils::DrawHudString( NAME_POS_START() + nameoffset, ypos, NAME_POS_END(), pl_info->name, r, g, b );
+		const int avatarSize = min(20, ScoreRowGap() - 2);
+		const int avatarX = NAME_POS_START() + nameoffset;
+		const int avatarY = ypos + (ScoreRowGap() - avatarSize) / 2;
+		const int avatarR = g_PlayerExtraInfo[best_player].talking ? 80 : r;
+		const int avatarG = g_PlayerExtraInfo[best_player].talking ? 220 : g;
+		const int avatarB = g_PlayerExtraInfo[best_player].talking ? 90 : b;
+		FillRGBABlend( avatarX, avatarY, avatarSize, avatarSize,
+			avatarR, avatarG, avatarB, isDead ? 35 : 70 );
+		CS16Steam_QueueAvatar( best_player, pl_info->m_nSteamID,
+			avatarX, avatarY, avatarSize, isDead ? 105 : 255, gHUD.m_flTime );
+		DrawUtils::DrawHudString( avatarX + avatarSize + 5, ypos,
+			NAME_POS_END(), pl_info->name, r, g, b );
 
 		if( cl_showplayerversion->value == 0.0f )
 		{

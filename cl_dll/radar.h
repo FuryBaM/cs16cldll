@@ -29,8 +29,12 @@ public:
 
 private:
     cvar_t* cl_radartype;
+    cvar_t* cl_radar_style;
+    cvar_t* cl_radar_alpha;
+    cvar_t* cl_radar_show_location;
 
     void DrawPlayerLocation(int y);
+    void DrawGuide();
     void DrawRadarDot(int x, int y, int r, int g, int b, int a);
     void DrawCross(int x, int y, int r, int g, int b, int a);
     void DrawT(int x, int y, int r, int g, int b, int a);
@@ -42,7 +46,7 @@ private:
     bool FlashTime(float flTime, struct extra_player_info_t* pplayer);
     Vector WorldToRadar(const Vector vPlayerOrigin, const Vector vObjectOrigin, const Vector vAngles);
     inline void DrawColoredTexture(int x, int y, int size, byte r, byte g, byte b, byte a, int texHandle);
-    // отрисовка квадрата (без gRenderAPI)
+    // РѕС‚СЂРёСЃРѕРІРєР° РєРІР°РґСЂР°С‚Р° (Р±РµР· gRenderAPI)
     inline void DrawColoredQuad(int x, int y, int size, byte r, byte g, byte b, byte a);
 
     int iMaxRadius;

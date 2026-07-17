@@ -100,6 +100,9 @@ int CHudRadar::Init()
 	m_iFlags = HUD_DRAW;
 
 	cl_radartype = CVAR_CREATE( "cl_radartype", "0", FCVAR_ARCHIVE );
+	cl_radar_style = CVAR_CREATE( "cl_radar_style", "1", FCVAR_ARCHIVE );
+	cl_radar_alpha = CVAR_CREATE( "cl_radar_alpha", "180", FCVAR_ARCHIVE );
+	cl_radar_show_location = CVAR_CREATE( "cl_radar_show_location", "1", FCVAR_ARCHIVE );
 
 	gHUD.AddHudElem( this );
 	return 1;
@@ -260,6 +263,9 @@ int CHudRadar::Draw(float flTime)
 		SPR_DrawAdditive( 0, 0, 0, &m_hRadarOpaque.rect );
 	}
 
+	if( cl_radar_style->value > 0.0f )
+		DrawGuide();
+
 	for(int i = 0; i < 33; i++)
 	{
 		// skip local player and dead players
@@ -275,21 +281,32 @@ int CHudRadar::Draw(float flTime)
 		if( !FlashTime( flTime, &g_PlayerExtraInfo[i]) )
 			continue;
 
-		// player with C4 or VIP must be red
+		// Important roles remain immediately recognizable. Ordinary teammates
+		// use team colors and active voice speakers turn green.
 		if( g_PlayerExtraInfo[i].has_c4 || g_PlayerExtraInfo[i].vip )
 		{
-			DrawUtils::UnpackRGB( r, g, b, RGB_REDISH );
+			r = 255; g = 75; b = 45;
+		}
+		else if( g_PlayerExtraInfo[i].talking )
+		{
+			r = 70; g = 255; b = 100;
+		}
+		else if( iTeamNumber == TEAM_CT )
+		{
+			r = 90; g = 175; b = 255;
 		}
 		else
 		{
-			// white
-			DrawUtils::UnpackRGB( r, g, b, RGB_WHITE );
+			r = 255; g = 180; b = 70;
 		}
 
 		// calc radar position
 		Vector pos = WorldToRadar(gHUD.m_vecOrigin, g_PlayerExtraInfo[i].origin, gHUD.m_vecAngles);
 
-		DrawZAxis( pos, r, g, b, 255 );
+		if( cl_radar_style->value > 0.0f )
+			DrawZAxis( Vector(pos.x + 1, pos.y + 1, pos.z), 0, 0, 0, 180 );
+		DrawZAxis( pos, r, g, b,
+			min( 255, max( 40, (int)cl_radar_alpha->value ) ) );
 	}
 
 	// Terrorist specific code( C4 Bomb )
@@ -333,10 +350,38 @@ int CHudRadar::Draw(float flTime)
 		}
 	}
 
-	if( gHUD.GetGameType() == GAME_CZERO )
+	if( cl_radar_show_location->value > 0.0f )
 		DrawPlayerLocation( ( m_hRadarOpaque.rect.Height() ) + 10 );
 
 	return 0;
+}
+
+void CHudRadar::DrawGuide()
+{
+	const int center = (int)iMaxRadius;
+	const int alpha = min( 150, max( 25, (int)cl_radar_alpha->value / 2 ) );
+	const int outerRadius = max( 4, center - 3 );
+	const int innerRadius = max( 3, center / 2 );
+
+	FillRGBABlend( 3, center, outerRadius * 2 - 1, 1, 90, 150, 90, alpha / 2 );
+	FillRGBABlend( center, 3, 1, outerRadius * 2 - 1, 90, 150, 90, alpha / 2 );
+	for( int degrees = 0; degrees < 360; degrees += 6 )
+	{
+		const float angle = DEG2RAD( (float)degrees );
+		const int ox = center + (int)(cos(angle) * outerRadius);
+		const int oy = center + (int)(sin(angle) * outerRadius);
+		FillRGBABlend( ox, oy, 1, 1, 120, 210, 120, alpha );
+		if( degrees % 12 == 0 )
+		{
+			const int ix = center + (int)(cos(angle) * innerRadius);
+			const int iy = center + (int)(sin(angle) * innerRadius);
+			FillRGBABlend( ix, iy, 1, 1, 80, 135, 80, alpha / 2 );
+		}
+	}
+
+	FillRGBABlend( center - 1, center - 2, 3, 4, 255, 255, 255, 220 );
+	FillRGBABlend( center - 2, center, 5, 2, 255, 160, 0, 230 );
+
 }
 
 void CHudRadar::DrawPlayerLocation( int y )

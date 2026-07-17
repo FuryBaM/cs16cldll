@@ -127,6 +127,8 @@
     <ClCompile Include="menu.cpp" />
     <ClCompile Include="message.cpp" />
     <ClCompile Include="nightvision.cpp" />
+    <ClCompile Include="platform\discord_rpc.cpp" />
+    <ClCompile Include="platform\steam_integration.cpp" />
     <ClCompile Include="radar.cpp" />
     <ClCompile Include="rain.cpp" />
     <ClCompile Include="saytext.cpp" />
@@ -181,6 +183,8 @@
     <ClInclude Include="kbutton.h" />
     <ClInclude Include="radar.h" />
     <ClInclude Include="rain.h" />
+    <ClInclude Include="platform\discord_rpc.h" />
+    <ClInclude Include="platform\steam_integration.h" />
     <ClInclude Include="StudioModelRenderer.h" />
     <ClInclude Include="tri.h" />
     <ClInclude Include="util_vector.h" />

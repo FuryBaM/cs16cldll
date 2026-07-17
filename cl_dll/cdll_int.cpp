@@ -35,6 +35,8 @@
 #include "Exports.h"
 #include "cs_vgui.h"
 #include "cs_vgui2.h"
+#include "platform/steam_integration.h"
+#include "platform/discord_rpc.h"
 
 cl_enginefunc_t		gEngfuncs = { };
 CHud gHUD;
@@ -409,6 +411,8 @@ void CL_DLLEXPORT HUD_Init(void)
 	InitInput();
 	CS16_StartupTrace("HUD_Init: input initialized");
 	gHUD.Init();
+	CS16Steam_Init();
+	CS16Discord_Init();
 	CS16VGUI2_RegisterCommands();
 	CS16VGUI_ResetSession();
 	gEngfuncs.Cvar_SetValue("_vgui_menus", CS16VGUI_IsAvailable() ? 1.0f : 0.0f);
@@ -529,6 +533,8 @@ void CL_DLLEXPORT HUD_Frame(double time)
 #endif
 
 	GetClientVoiceMgr()->Frame(time);
+	CS16Steam_Frame(time);
+	CS16Discord_Frame(time);
 	if (tracedFirstFrame && CS16_RuntimeTraceEnabled())
 		CS16_StartupTrace("HUD_Frame: complete");
 }
@@ -548,6 +554,7 @@ void CL_DLLEXPORT HUD_VoiceStatus(int entindex, qboolean bTalking)
 
 	if (entindex > 0 && entindex <= gEngfuncs.GetMaxClients())
 	{
+		g_PlayerExtraInfo[entindex].talking = bTalking != 0;
 		if (bTalking)
 		{
 			g_PlayerExtraInfo[entindex].radarflashtime = gHUD.m_flTime;
