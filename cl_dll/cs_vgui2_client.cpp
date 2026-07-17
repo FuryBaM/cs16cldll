@@ -12,6 +12,7 @@
 #include <vgui/MouseCode.h>
 #include <tier1/KeyValues.h>
 
+#include <math.h>
 #include <string.h>
 
 extern "C" void CS16VGUI_ClientCommand(const char* command);
@@ -37,7 +38,76 @@ enum
     CS_TEAM_CT = 2,
     MAX_MENU_ENTRIES = 16,
     MAX_DECORATIONS = 8,
-    MAX_RESOURCE_LABELS = 8
+    MAX_RESOURCE_LABELS = 8,
+    // HudText effects are emitted character-by-character. Several active
+    // server messages plus ShowMenu can exceed 128 entries in one frame.
+    MAX_HUD_TEXT_DRAWS = 2048
+};
+
+struct HudTextDraw
+{
+    int x, y;
+    int r, g, b, a;
+    char text[512];
+};
+
+class CCS16VGUI2Viewport;
+
+class CCS16HudTextPanel : public vgui2::IClientPanel
+{
+public:
+    explicit CCS16HudTextPanel(CCS16VGUI2Viewport* owner)
+        : m_owner(owner), m_vpanel(0), m_panel(NULL), m_surface(NULL) {}
+
+    void Attach(vgui2::VPANEL vpanel, vgui2::IPanel* panel,
+        vgui2::ISurface* surface)
+    {
+        m_vpanel = vpanel; m_panel = panel; m_surface = surface;
+    }
+    vgui2::VPANEL GetVPanel() override { return m_vpanel; }
+    void Think() override {}
+    void PerformApplySchemeSettings() override {}
+    void PaintTraverse(bool, bool) override;
+    void Repaint() override
+    {
+        // Called by IPanel::Repaint. Calling it back from here recurses until
+        // stack overflow, so only invalidate the surface in this callback.
+        if (m_surface && m_vpanel) m_surface->Invalidate(m_vpanel);
+    }
+    vgui2::VPANEL IsWithinTraverse(int, int, bool) override { return 0; }
+    void GetInset(int& top, int& left, int& right, int& bottom) override
+    { top = left = right = bottom = 0; }
+    void GetClipRect(int& x0, int& y0, int& x1, int& y1) override
+    {
+        if (m_panel && m_vpanel) m_panel->GetClipRect(m_vpanel, x0, y0, x1, y1);
+        else x0 = y0 = x1 = y1 = 0;
+    }
+    void OnChildAdded(vgui2::VPANEL) override {}
+    void OnSizeChanged(int, int) override {}
+    void InternalFocusChanged(bool) override {}
+    bool RequestInfo(KeyValues*) override { return false; }
+    void RequestFocus(int) override {}
+    bool RequestFocusPrev(vgui2::VPANEL) override { return false; }
+    bool RequestFocusNext(vgui2::VPANEL) override { return false; }
+    void OnMessage(const KeyValues*, vgui2::VPANEL) override {}
+    vgui2::VPANEL GetCurrentKeyFocus() override { return 0; }
+    int GetTabPosition() override { return 0; }
+    const char* GetName() override { return "CS16HudTextPanel"; }
+    const char* GetClassName() override { return "CS16HudTextPanel"; }
+    vgui2::HScheme GetScheme() override { return 0; }
+    bool IsProportional() override { return false; }
+    bool IsAutoDeleteSet() override { return false; }
+    void DeletePanel() override {}
+    void* QueryInterface(vgui2::EInterfaceID id) override
+    { return id == vgui2::ICLIENTPANEL_STANDARD_INTERFACE ? this : NULL; }
+    vgui2::Panel* GetPanel() override { return NULL; }
+    const char* GetModuleName() override { return "CS16CLIENT"; }
+
+private:
+    CCS16VGUI2Viewport* m_owner;
+    vgui2::VPANEL m_vpanel;
+    vgui2::IPanel* m_panel;
+    vgui2::ISurface* m_surface;
 };
 
 struct MenuEntry
@@ -128,10 +198,13 @@ class CCS16VGUI2Viewport : public vgui2::IClientPanel
 public:
     CCS16VGUI2Viewport()
         : m_ivgui(NULL), m_panel(NULL), m_surface(NULL), m_input(NULL),
-          m_vpanel(0), m_visible(false), m_legacyCursorVisible(false),
+          m_vpanel(0), m_hudVPanel(0), m_hudPanelClient(this),
+          m_visible(false), m_legacyCursorVisible(false),
           m_currentMenu(0), m_team(CS_TEAM_T),
           m_entryCount(0), m_hoveredEntry(-1), m_selectedEntry(-1),
-          m_font(vgui2::INVALID_FONT), m_titleFont(vgui2::INVALID_FONT),
+          m_hudTextDrawCount(0),
+          m_hudFont(vgui2::INVALID_FONT), m_font(vgui2::INVALID_FONT),
+          m_titleFont(vgui2::INVALID_FONT),
           m_infoFont(vgui2::INVALID_FONT),
           m_previewTexture(0), m_loadedPreviewEntry(-1),
           m_logoTexture(0), m_logoLoaded(false)
@@ -167,8 +240,28 @@ public:
         // A popup is registered in ISurface's popup list. GoldSrc derives
         // cursor visibility from that list every frame; a merely visible root
         // panel is painted but its mouse cursor is forced back to dc_none.
-        m_surface->CreatePopup(m_vpanel, false, false, false, true, true);
+        m_surface->CreatePopup(m_vpanel, false, false, false, false, false);
+        m_panel->SetKeyBoardInputEnabled(m_vpanel, false);
+        m_panel->SetMouseInputEnabled(m_vpanel, false);
+        // HUD text is drawn synchronously from HUD_Redraw and does not need a
+        // visible popup. Keep this hidden until an actual client menu opens,
+        // otherwise it interferes with GameUI's Escape-menu cursor.
         m_panel->SetVisible(m_vpanel, false);
+
+        // Unicode HUD text has its own ordinary child panel. It is not a
+        // popup and never accepts input, so it cannot affect GameUI's cursor.
+        m_hudVPanel = m_ivgui->AllocPanel();
+        if (!m_hudVPanel)
+        {
+            m_ivgui->FreePanel(m_vpanel);
+            m_vpanel = 0;
+            return false;
+        }
+        m_hudPanelClient.Attach(m_hudVPanel, m_panel, m_surface);
+        m_panel->Init(m_hudVPanel, &m_hudPanelClient);
+        m_panel->SetKeyBoardInputEnabled(m_hudVPanel, false);
+        m_panel->SetMouseInputEnabled(m_hudVPanel, false);
+        m_panel->SetVisible(m_hudVPanel, true);
         ResizeToScreen();
         return true;
     }
@@ -176,17 +269,22 @@ public:
     void Shutdown()
     {
         HideMenu();
+        if (m_hudVPanel && m_ivgui)
+            m_ivgui->FreePanel(m_hudVPanel);
         if (m_vpanel && m_ivgui)
             m_ivgui->FreePanel(m_vpanel);
 
+        m_hudVPanel = 0;
         m_vpanel = 0;
         m_ivgui = NULL;
         m_panel = NULL;
         m_surface = NULL;
         m_input = NULL;
+        m_hudFont = vgui2::INVALID_FONT;
         m_font = vgui2::INVALID_FONT;
         m_titleFont = vgui2::INVALID_FONT;
         m_infoFont = vgui2::INVALID_FONT;
+        m_hudTextDrawCount = 0;
         m_previewTexture = 0;
         m_loadedPreviewEntry = -1;
         m_logoTexture = 0;
@@ -198,7 +296,15 @@ public:
     void SetParent(vgui2::VPANEL parent)
     {
         if (m_vpanel && m_panel)
+        {
             m_panel->SetParent(m_vpanel, parent);
+            m_panel->SetVisible(m_vpanel, m_visible || m_legacyCursorVisible);
+            if (m_hudVPanel)
+            {
+                m_panel->SetParent(m_hudVPanel, parent);
+                m_panel->SetVisible(m_hudVPanel, true);
+            }
+        }
     }
 
     void ResizeToScreen()
@@ -211,11 +317,126 @@ public:
         m_surface->GetScreenSize(wide, tall);
         m_panel->SetPos(m_vpanel, 0, 0);
         m_panel->SetSize(m_vpanel, wide, tall);
+        if (m_hudVPanel)
+        {
+            m_panel->SetPos(m_hudVPanel, 0, 0);
+            m_panel->SetSize(m_hudVPanel, wide, tall);
+        }
     }
 
     void SetTeam(int team)
     {
         m_team = team == CS_TEAM_CT ? CS_TEAM_CT : CS_TEAM_T;
+    }
+
+    void BeginHudTextFrame()
+    {
+        // Keep the completed list after painting. GoldSrc may traverse VGUI
+        // before or after HUD_Redraw, so the preceding complete frame remains
+        // available until the next HUD frame starts here.
+        m_hudTextDrawCount = 0;
+        if (m_hudVPanel && m_panel)
+        {
+            // IPanel::Repaint is what schedules IClientPanel::PaintTraverse.
+            // ISurface::Invalidate alone is not reliable for an ordinary
+            // non-popup child on Steam GoldSrc.
+            m_panel->Repaint(m_hudVPanel);
+            if (m_surface)
+                m_surface->Invalidate(m_hudVPanel);
+        }
+    }
+
+    int DrawHudString(int x, int y, const char* text,
+        int r, int g, int b, int a)
+    {
+        if (!m_surface || !m_vpanel || !text)
+            return -1;
+
+        EnsureFonts();
+        if (m_hudFont == vgui2::INVALID_FONT)
+            return -1;
+
+        wchar_t wideText[1024];
+        const int length = ConvertText(text, wideText, ARRAYSIZE(wideText));
+        int textWide = 0, textTall = 0;
+        m_surface->GetTextSize(m_hudFont, wideText, textWide, textTall);
+
+        // GoldSrc HUD text is additive: lowering RGB fades a glyph toward
+        // invisibility. Convert that intensity into alpha for VGUI so dark
+        // fade stages do not become opaque black text.
+        r = max(0, min(r, 255));
+        g = max(0, min(g, 255));
+        b = max(0, min(b, 255));
+        a = max(0, min(a, 255));
+        const int intensity = max(r, max(g, b));
+        if (intensity <= 0)
+        {
+            r = g = b = 255;
+            a = 0;
+        }
+        else if (intensity < 255)
+        {
+            r = r * 255 / intensity;
+            g = g * 255 / intensity;
+            b = b * 255 / intensity;
+            a = a * intensity / 255;
+        }
+
+        if (m_hudTextDrawCount < MAX_HUD_TEXT_DRAWS)
+        {
+            HudTextDraw& draw = m_hudTextDraws[m_hudTextDrawCount++];
+            draw.x = x; draw.y = y;
+            draw.r = r; draw.g = g; draw.b = b; draw.a = a;
+            strncpy(draw.text, text, sizeof(draw.text));
+            draw.text[sizeof(draw.text) - 1] = '\0';
+            if (m_hudTextDrawCount == 1 && m_hudVPanel)
+            {
+                m_panel->Repaint(m_hudVPanel);
+                m_surface->Invalidate(m_hudVPanel);
+            }
+        }
+        (void)length;
+        return textWide;
+    }
+
+    bool GetHudStringSize(const char* text, int& wide, int& tall)
+    {
+        wide = tall = 0;
+        if (!m_surface || !text)
+            return false;
+
+        EnsureFonts();
+        if (m_hudFont == vgui2::INVALID_FONT)
+            return false;
+
+        wchar_t wideText[1024];
+        ConvertText(text, wideText, ARRAYSIZE(wideText));
+        m_surface->GetTextSize(m_hudFont, wideText, wide, tall);
+        return true;
+    }
+
+    void PaintHudText()
+    {
+        if (!m_surface || !m_hudVPanel || m_hudTextDrawCount == 0)
+            return;
+
+        EnsureFonts();
+        if (m_hudFont == vgui2::INVALID_FONT)
+            return;
+
+        m_surface->PushMakeCurrent(m_hudVPanel, false);
+        for (int i = 0; i < m_hudTextDrawCount; ++i)
+        {
+            const HudTextDraw& draw = m_hudTextDraws[i];
+            wchar_t wide[512];
+            const int length = ConvertText(draw.text, wide, ARRAYSIZE(wide));
+            m_surface->DrawSetTextFont(m_hudFont);
+            m_surface->DrawSetTextColor(draw.r, draw.g, draw.b, draw.a);
+            m_surface->DrawSetTextPos(draw.x, draw.y);
+            m_surface->DrawPrintText(wide, length);
+        }
+        m_surface->DrawFlushText();
+        m_surface->PopMakeCurrent(m_hudVPanel);
     }
 
     bool ShowMenu(int menuId)
@@ -299,6 +520,8 @@ public:
             ResizeToScreen();
             m_visible = true;
             m_legacyCursorVisible = false;
+            m_panel->SetKeyBoardInputEnabled(m_vpanel, true);
+            m_panel->SetMouseInputEnabled(m_vpanel, true);
             m_panel->SetVisible(m_vpanel, true);
             m_panel->MoveToFront(m_vpanel);
             m_input->SetMouseFocus(m_vpanel);
@@ -318,8 +541,14 @@ public:
         m_visible = false;
         m_hoveredEntry = -1;
         m_selectedEntry = -1;
-        if (m_vpanel && m_panel && !m_legacyCursorVisible)
-            m_panel->SetVisible(m_vpanel, false);
+        if (m_vpanel && m_panel)
+        {
+            m_panel->SetKeyBoardInputEnabled(m_vpanel, false);
+            m_panel->SetMouseInputEnabled(m_vpanel, false);
+            m_panel->SetVisible(m_vpanel, m_legacyCursorVisible);
+            if (!m_legacyCursorVisible)
+                m_surface->CalculateMouseVisible();
+        }
         CS16VGUI_SetMouseVisible(0);
     }
 
@@ -339,6 +568,10 @@ public:
         else
         {
             m_panel->SetVisible(m_vpanel, false);
+            // Cursor state is shared by every VGUI popup, including GameUI's
+            // Escape/pause menu.  Recalculate it instead of globally forcing
+            // dc_none, otherwise the pause menu is left without a cursor.
+            m_surface->CalculateMouseVisible();
         }
     }
 
@@ -402,6 +635,7 @@ public:
 
         m_surface->PushMakeCurrent(m_vpanel, false);
         EnsureFonts();
+
         int left = 0, top = 0;
         GetMenuOrigin(left, top);
         DrawViewportBackground();
@@ -569,16 +803,47 @@ private:
         return value * tall / 480;
     }
 
+    void DrawRoundedFilledRect(int x0, int y0, int x1, int y1,
+        int radiusX, int radiusY, int r, int g, int b, int a)
+    {
+        if (!m_surface || x1 <= x0 || y1 <= y0)
+            return;
+
+        radiusX = min(radiusX, (x1 - x0) / 2);
+        radiusY = min(radiusY, (y1 - y0) / 2);
+        if (radiusX <= 0 || radiusY <= 0)
+        {
+            m_surface->DrawSetColor(r, g, b, a);
+            m_surface->DrawFilledRect(x0, y0, x1, y1);
+            return;
+        }
+
+        m_surface->DrawSetColor(r, g, b, a);
+
+        // The middle and the rounded rows never overlap. This is important
+        // for translucent colors: overlapping rectangles made the old corners
+        // look like several dark square layers.
+        m_surface->DrawFilledRect(x0, y0 + radiusY, x1, y1 - radiusY);
+        for (int row = 0; row < radiusY; ++row)
+        {
+            const float dy = (radiusY - row - 0.5f) / (float)radiusY;
+            const float arc = sqrtf(max(0.0f, 1.0f - dy * dy));
+            const int inset = (int)(radiusX * (1.0f - arc) + 0.5f);
+
+            m_surface->DrawFilledRect(x0 + inset, y0 + row,
+                x1 - inset, y0 + row + 1);
+            m_surface->DrawFilledRect(x0 + inset, y1 - row - 1,
+                x1 - inset, y1 - row);
+        }
+    }
+
     void DrawViewportBackground()
     {
         const int x0 = ScaleX(20), y0 = ScaleY(20);
         const int x1 = ScaleX(620), y1 = ScaleY(460);
         const int radiusX = ScaleX(10), radiusY = ScaleY(10);
-        m_surface->DrawSetColor(0, 0, 0, 188);
-        m_surface->DrawFilledRect(x0 + radiusX, y0, x1 - radiusX, y1);
-        m_surface->DrawFilledRect(x0, y0 + radiusY, x1, y1 - radiusY);
-        m_surface->DrawFilledRect(x0 + radiusX / 2, y0 + radiusY / 3,
-            x1 - radiusX / 2, y1 - radiusY / 3);
+        DrawRoundedFilledRect(x0, y0, x1, y1,
+            radiusX, radiusY, 0, 0, 0, 188);
 
         m_surface->DrawSetColor(180, 180, 180, 115);
         m_surface->DrawFilledRect(ScaleX(20), ScaleY(72),
@@ -616,6 +881,14 @@ private:
 
     void EnsureFonts()
     {
+        if (m_hudFont == vgui2::INVALID_FONT)
+        {
+            m_hudFont = m_surface->CreateFont();
+            if (m_hudFont != vgui2::INVALID_FONT)
+                m_surface->AddGlyphSetToFont(m_hudFont, "Verdana", 12, 500, 0, 0,
+                    vgui2::ISurface::FONTFLAG_ANTIALIAS |
+                    vgui2::ISurface::FONTFLAG_ADDITIVE, 0x0000, 0x04ff);
+        }
         if (m_font == vgui2::INVALID_FONT)
         {
             m_font = m_surface->CreateFont();
@@ -643,9 +916,10 @@ private:
     {
         if (!wide || capacity <= 0)
             return 0;
-        int length = 0;
         if (!text)
             text = "";
+
+        int length = 0;
         while (text[length] && length < capacity - 1)
         {
             const unsigned char ch = (unsigned char)text[length];
@@ -1555,6 +1829,8 @@ private:
     vgui2::ISurface* m_surface;
     vgui2::IInput* m_input;
     vgui2::VPANEL m_vpanel;
+    vgui2::VPANEL m_hudVPanel;
+    CCS16HudTextPanel m_hudPanelClient;
     bool m_visible;
     bool m_legacyCursorVisible;
     int m_currentMenu;
@@ -1562,6 +1838,9 @@ private:
     int m_entryCount;
     int m_hoveredEntry;
     int m_selectedEntry;
+    HudTextDraw m_hudTextDraws[MAX_HUD_TEXT_DRAWS];
+    int m_hudTextDrawCount;
+    vgui2::HFont m_hudFont;
     vgui2::HFont m_font;
     vgui2::HFont m_titleFont;
     vgui2::HFont m_infoFont;
@@ -1588,6 +1867,12 @@ private:
     unsigned char m_previewPixels[256 * 256 * 4];
     MenuEntry m_entries[MAX_MENU_ENTRIES];
 };
+
+void CCS16HudTextPanel::PaintTraverse(bool, bool)
+{
+    if (m_owner)
+        m_owner->PaintHudText();
+}
 
 class CCS16ClientVGUI : public IClientVGUI
 {
@@ -1638,6 +1923,21 @@ public:
     {
         if (IsReady()) m_viewport.SetLegacyCursorVisible(visible);
     }
+    void BeginHudTextFrame()
+    {
+        if (IsReady()) m_viewport.BeginHudTextFrame();
+    }
+    int DrawHudString(int x, int y, const char* text,
+        int r, int g, int b, int a)
+    {
+        return IsReady()
+            ? m_viewport.DrawHudString(x, y, text, r, g, b, a)
+            : -1;
+    }
+    bool GetHudStringSize(const char* text, int& wide, int& tall)
+    {
+        return IsReady() && m_viewport.GetHudStringSize(text, wide, tall);
+    }
 
 private:
     CCS16VGUI2Viewport m_viewport;
@@ -1678,6 +1978,24 @@ extern "C" void CS16VGUI2_SetTeam(int team)
 extern "C" void CS16VGUI2_SetLegacyCursorVisible(int visible)
 {
     g_clientVGUI.SetLegacyCursorVisible(visible != 0);
+}
+
+extern "C" void CS16VGUI2_BeginHudTextFrame(void)
+{
+    g_clientVGUI.BeginHudTextFrame();
+}
+
+extern "C" int CS16VGUI2_DrawHudString(int x, int y, const char* text,
+    int r, int g, int b, int a)
+{
+    return g_clientVGUI.DrawHudString(x, y, text, r, g, b, a);
+}
+
+extern "C" int CS16VGUI2_GetHudStringSize(const char* text, int* wide, int* tall)
+{
+    if (!wide || !tall)
+        return 0;
+    return g_clientVGUI.GetHudStringSize(text, *wide, *tall) ? 1 : 0;
 }
 
 extern "C" void CS16VGUI2_ShutdownViewport(void)

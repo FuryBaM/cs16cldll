@@ -23,9 +23,50 @@
 #include "parsemsg.h"
 #include "kbutton.h"
 #include "triangleapi.h"
+#include <ctype.h>
 #include <string.h>
 #include <stdio.h>
 #include "draw_util.h"
+
+namespace
+{
+bool StartsWithInsensitive(const char* text, const char* prefix)
+{
+	while (*prefix)
+	{
+		if (!*text || tolower((unsigned char)*text) != tolower((unsigned char)*prefix))
+			return false;
+		++text;
+		++prefix;
+	}
+	return true;
+}
+
+bool IsHtmlMotd(const char* text)
+{
+	if (!text)
+		return false;
+
+	const unsigned char* bytes = (const unsigned char*)text;
+	if (bytes[0] == 0xef && bytes[1] == 0xbb && bytes[2] == 0xbf)
+		text += 3;
+
+	while (*text && isspace((unsigned char)*text))
+		++text;
+
+	static const char* prefixes[] =
+	{
+		"<!doctype", "<html", "<head", "<body", "<meta", "<style", "<script"
+	};
+	for (int i = 0; i < ARRAYSIZE(prefixes); ++i)
+	{
+		if (StartsWithInsensitive(text, prefixes[i]))
+			return true;
+	}
+
+	return false;
+}
+}
 
 DECLARE_MESSAGE(m_MOTD, MOTD)
 
@@ -134,19 +175,29 @@ int CHudMOTD :: MsgFunc_MOTD( const char *pszName, int iSize, void *pbuf )
 		Reset(); // clear the current MOTD in prep for this one
 	}
 
-	if( ignoreThisMotd )
-		return 1;
-
 	BufferReader reader( pszName, pbuf, iSize );
 
 	int is_finished = reader.ReadByte();
-	strcat( m_szMOTD, reader.ReadString() );
+	const char* chunk = reader.ReadString();
 
-	// we still don't support html tags in motd :(
-	if(strstr( m_szMOTD, "<!DOCTYPE HTML>" ) )
+	if (ignoreThisMotd)
+	{
+		if (is_finished)
+			Reset();
+		return 1;
+	}
+
+	const size_t used = strlen(m_szMOTD);
+	if (used < sizeof(m_szMOTD) - 1)
+		strncat(m_szMOTD, chunk, sizeof(m_szMOTD) - used - 1);
+
+	// The legacy HUD is text-only. HTML MOTDs may begin with meta/body tags,
+	// a BOM, whitespace, or a lower-case doctype, so do not render their source.
+	if (IsHtmlMotd(m_szMOTD))
 	{
 		Reset();
-		ignoreThisMotd = true;
+		ignoreThisMotd = !is_finished;
+		return 1;
 	}
 
 	if ( is_finished )

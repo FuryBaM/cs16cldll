@@ -612,7 +612,7 @@ struct message_parms_t
 	int lines;
 	int lineLength;
 	int length;
-	int r, g, b;
+	int r, g, b, a;
 	int text;
 	int fadeBlend;
 	float charTime;

@@ -446,8 +446,10 @@ void CHud :: VidInit( void )
 	m_scrinfo.iSize = sizeof( m_scrinfo );
 	GetScreenInfo( &m_scrinfo );
 
-	m_truescrinfo.iWidth = CVAR_GET_FLOAT("width");
-	m_truescrinfo.iHeight = CVAR_GET_FLOAT("height");
+	// GetScreenInfo is authoritative in Steam GoldSrc. The Xash-only width
+	// and height cvars may be absent (zero) or stale, which used to collapse
+	// the crosshair and sniper-scope coordinates into the top-left corner.
+	m_truescrinfo = m_scrinfo;
 
 	// ----------
 	// Load Sprites
@@ -456,7 +458,7 @@ void CHud :: VidInit( void )
 	
 	m_hsprLogo = 0;
 
-	m_flScale = (float)TrueWidth / (float)ScreenWidth;
+	m_flScale = 1.0f;
 
 	m_iRes = 640;
 

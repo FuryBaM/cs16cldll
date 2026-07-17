@@ -35,8 +35,34 @@ version.
 
 #include "draw_util.h"
 
+#include <math.h>
+
+namespace
+{
+void DrawScopeCorner(float outerX, float outerY, float centerX, float centerY,
+	float radius, float startAngle, float endAngle)
+{
+	triangleapi_t* tri = gEngfuncs.pTriAPI;
+	if (!tri)
+		return;
+
+	const int segments = 24;
+	tri->Begin(TRI_TRIANGLE_FAN);
+	tri->Vertex3f(outerX, outerY, 0.0f);
+	for (int i = 0; i <= segments; ++i)
+	{
+		const float fraction = (float)i / (float)segments;
+		const float angle = startAngle + (endAngle - startAngle) * fraction;
+		tri->Vertex3f(centerX + cosf(angle) * radius,
+			centerY + sinf(angle) * radius, 0.0f);
+	}
+	tri->End();
+}
+}
+
 int CHudSniperScope::Init()
 {
+	gHUD.AddHudElem(this);
 	m_iFlags = HUD_DRAW;
 	m_iScopeArc[0] = m_iScopeArc[1] =m_iScopeArc[2] = m_iScopeArc[3]  = 0;
 	return 1;
@@ -44,29 +70,56 @@ int CHudSniperScope::Init()
 
 int CHudSniperScope::VidInit()
 {
-	// Ѕез Xash: просто рассчитываем геометрию
-	left = (TrueWidth - TrueHeight) * 0.5f;
-	if (left < 0) left = 0; // на узких экранах
-	right = left + TrueHeight;
-	centerx = TrueWidth * 0.5f;
-	centery = TrueHeight * 0.5f;
+	centerx = ScreenWidth * 0.5f;
+	centery = ScreenHeight * 0.5f;
+	const float diameter = (float)min(ScreenWidth, ScreenHeight);
+	left = centerx - diameter * 0.5f;
+	right = centerx + diameter * 0.5f;
 	return 1;
 }
 
 int CHudSniperScope::Draw(float)
 {
-	if (gHUD.m_iFOV > 40) return 1;
+	if (gHUD.m_iFOV <= 0 || gHUD.m_iFOV > 40)
+		return 1;
 
-	// боковые шторки
-	gEngfuncs.pfnFillRGBA(0, 0, (int)(left + 2), (int)TrueHeight, 0, 0, 0, 255);
-	gEngfuncs.pfnFillRGBA((int)right, 0, (int)(TrueWidth - right), (int)TrueHeight, 0, 0, 0, 255);
+	// Recalculate every frame so a late video-mode change cannot leave stale
+	// scope geometry behind.
+	centerx = ScreenWidth * 0.5f;
+	centery = ScreenHeight * 0.5f;
+	const float diameter = (float)min(ScreenWidth, ScreenHeight);
+	const float radius = diameter * 0.5f;
+	left = centerx - radius;
+	right = centerx + radius;
+	const float top = centery - radius;
+	const float bottom = centery + radius;
 
-	// горизонтальна€ лини€
-	gEngfuncs.pfnFillRGBA((int)left, (int)(centery + 1), (int)(right - left), 1, 0, 0, 0, 255);
-	// вертикальна€ лини€
-	gEngfuncs.pfnFillRGBA((int)(centerx - 1), 0, 1, (int)TrueHeight, 0, 0, 0, 255);
+	// Black bars outside the largest centered square.
+	gEngfuncs.pfnFillRGBA(0, 0, (int)left + 1, ScreenHeight, 0, 0, 0, 255);
+	gEngfuncs.pfnFillRGBA((int)right, 0, ScreenWidth - (int)right, ScreenHeight, 0, 0, 0, 255);
+	gEngfuncs.pfnFillRGBA((int)left, 0, (int)(right - left), (int)top + 1, 0, 0, 0, 255);
+	gEngfuncs.pfnFillRGBA((int)left, (int)bottom, (int)(right - left), ScreenHeight - (int)bottom, 0, 0, 0, 255);
 
-	return 0;
+	if (gEngfuncs.pTriAPI)
+	{
+		triangleapi_t* tri = gEngfuncs.pTriAPI;
+		tri->RenderMode(kRenderNormal);
+		tri->Brightness(1.0f);
+		tri->Color4ub(0, 0, 0, 255);
+		tri->CullFace(TRI_NONE);
+
+		const float pi = 3.14159265358979323846f;
+		DrawScopeCorner(left, top, centerx, centery, radius, -pi * 0.5f, -pi);
+		DrawScopeCorner(right, top, centerx, centery, radius, 0.0f, -pi * 0.5f);
+		DrawScopeCorner(right, bottom, centerx, centery, radius, pi * 0.5f, 0.0f);
+		DrawScopeCorner(left, bottom, centerx, centery, radius, pi, pi * 0.5f);
+	}
+
+	// Pixel-perfect crosshair lines across the circular opening.
+	gEngfuncs.pfnFillRGBA((int)left, (int)centery, (int)(right - left), 1, 0, 0, 0, 255);
+	gEngfuncs.pfnFillRGBA((int)centerx, (int)top, 1, (int)(bottom - top), 0, 0, 0, 255);
+
+	return 1;
 }
 
 void CHudSniperScope::Shutdown() { }

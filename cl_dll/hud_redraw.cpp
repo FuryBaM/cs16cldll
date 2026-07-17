@@ -88,6 +88,7 @@ int CHud::Redraw(float flTime, int intermission)
 {
 	static bool tracedFirstRedraw = false;
 	const bool traceThisRedraw = !tracedFirstRedraw || CS16_RuntimeTraceEnabled();
+	CS16VGUI2_BeginHudTextFrame();
 
 	m_fOldTime = m_flTime;	// save time of previous redraw
 	m_flTime = flTime;
@@ -220,7 +221,15 @@ void CHud::UpdateDefaultHUDColor()
 
 int CHud::DrawHudString(int xpos, int ypos, int iMaxX, char* szIt, int r, int g, int b)
 {
-	return xpos + gEngfuncs.pfnDrawString(xpos, ypos, szIt, r, g, b);
+	char converted[4096];
+	const char* text = CS16_LegacyHudText(szIt, converted, sizeof(converted));
+	if (CS16_HudTextNeedsUnicode(text))
+	{
+		const int wide = CS16VGUI2_DrawHudString(xpos, ypos, text, r, g, b, 255);
+		if (wide >= 0)
+			return xpos + wide;
+	}
+	return xpos + gEngfuncs.pfnDrawString(xpos, ypos, text, r, g, b);
 }
 
 int CHud::DrawHudNumberString(int xpos, int ypos, int iMinX, int iNumber, int r, int g, int b)
@@ -234,7 +243,16 @@ int CHud::DrawHudNumberString(int xpos, int ypos, int iMinX, int iNumber, int r,
 // draws a string from right to left (right-aligned)
 int CHud::DrawHudStringReverse(int xpos, int ypos, int iMinX, char* szString, int r, int g, int b)
 {
-	return xpos - gEngfuncs.pfnDrawStringReverse(xpos, ypos, szString, r, g, b);
+	char converted[4096];
+	const char* text = CS16_LegacyHudText(szString, converted, sizeof(converted));
+	if (CS16_HudTextNeedsUnicode(text))
+	{
+		int wide = 0, tall = 0;
+		if (CS16VGUI2_GetHudStringSize(text, &wide, &tall) &&
+			CS16VGUI2_DrawHudString(xpos - wide, ypos, text, r, g, b, 255) >= 0)
+			return xpos - wide;
+	}
+	return xpos - gEngfuncs.pfnDrawStringReverse(xpos, ypos, text, r, g, b);
 }
 
 int CHud::DrawHudNumber(int x, int y, int iFlags, int iNumber, int r, int g, int b)

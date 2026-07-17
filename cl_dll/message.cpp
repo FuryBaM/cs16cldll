@@ -190,11 +190,41 @@ void CHudMessage::MessageScanNextChar(void)
 	m_parms.r = ((srcRed * (255 - blend)) + (destRed * blend)) >> 8;
 	m_parms.g = ((srcGreen * (255 - blend)) + (destGreen * blend)) >> 8;
 	m_parms.b = ((srcBlue * (255 - blend)) + (destBlue * blend)) >> 8;
+	m_parms.a = 255;
+
+	// The stock GoldSrc font is additive, so fading RGB toward black makes it
+	// disappear. Normal VGUI blending would instead leave an opaque black
+	// glyph. Preserve the source hue and express black fades as real alpha.
+	if (m_parms.pMessage->effect == 0 || m_parms.pMessage->effect == 1)
+	{
+		m_parms.r = srcRed;
+		m_parms.g = srcGreen;
+		m_parms.b = srcBlue;
+		m_parms.a = 255 - blend;
+	}
+	else if (m_parms.pMessage->effect == 2)
+	{
+		if (m_parms.charTime > m_parms.time)
+			m_parms.a = 0;
+		else if (m_parms.time > m_parms.fadeTime)
+		{
+			m_parms.r = srcRed;
+			m_parms.g = srcGreen;
+			m_parms.b = srcBlue;
+			m_parms.a = 255 - blend;
+		}
+	}
 
 	if (m_parms.pMessage->effect == 1 && m_parms.charTime != 0)
 	{
-		if (m_parms.x >= 0 && m_parms.y >= 0 && (m_parms.x + gHUD.GetCharWidth(m_parms.text)) <= ScreenWidth)
-			DrawUtils::TextMessageDrawChar(m_parms.x, m_parms.y, m_parms.text, m_parms.pMessage->r2, m_parms.pMessage->g2, m_parms.pMessage->b2);
+		const bool unicodeMessage =
+			CS16_HudTextNeedsUnicode(m_parms.pMessage->pMessage);
+		if (m_parms.x >= 0 && m_parms.y >= 0 &&
+			(m_parms.x + DrawUtils::HudCharacterWidth(m_parms.text,
+				unicodeMessage)) <= ScreenWidth)
+			DrawUtils::TextMessageDrawChar(m_parms.x, m_parms.y, m_parms.text,
+				m_parms.pMessage->r2, m_parms.pMessage->g2,
+				m_parms.pMessage->b2, 0.0f, unicodeMessage, 255);
 	}
 }
 
@@ -245,8 +275,13 @@ void CHudMessage::MessageDrawScan(client_textmessage_t* pMessage, float time)
 	int i, j, length, width;
 	const char* pText;
 	unsigned char line[80];
+	char legacyText[4096];
 
-	pText = pMessage->pMessage;
+	// HudText is drawn one byte at a time through the legacy GoldSrc font.
+	// Convert valid UTF-8 as a whole first; otherwise every UTF-8 byte becomes
+	// a separate mojibake glyph.
+	pText = CS16_LegacyHudText(pMessage->pMessage, legacyText, sizeof(legacyText));
+	const bool unicodeMessage = CS16_HudTextNeedsUnicode(legacyText);
 	// Count lines
 	m_parms.lines = 1;
 	m_parms.time = time;
@@ -273,7 +308,7 @@ void CHudMessage::MessageDrawScan(client_textmessage_t* pMessage, float time)
 				pText++;
 				continue;
 			}
-			width += gHUD.GetCharWidth(uch);
+			width += DrawUtils::HudCharacterWidth(uch, unicodeMessage);
 		}
 		pText++;
 		length++;
@@ -283,7 +318,7 @@ void CHudMessage::MessageDrawScan(client_textmessage_t* pMessage, float time)
 
 
 	m_parms.y = YPosition(pMessage->y, m_parms.totalHeight);
-	pText = pMessage->pMessage;
+	pText = legacyText;
 
 	m_parms.charTime = 0;
 
@@ -305,7 +340,7 @@ void CHudMessage::MessageDrawScan(client_textmessage_t* pMessage, float time)
 				pText++;
 				continue;
 			}
-			m_parms.width += gHUD.GetCharWidth(uch);
+			m_parms.width += DrawUtils::HudCharacterWidth(uch, unicodeMessage);
 			pText++;
 		}
 		pText++;		// Skip LF
@@ -316,11 +351,14 @@ void CHudMessage::MessageDrawScan(client_textmessage_t* pMessage, float time)
 		for (j = 0; j < m_parms.lineLength; j++)
 		{
 			m_parms.text = line[j];
-			int next = m_parms.x + gHUD.GetCharWidth(m_parms.text);
+			int next = m_parms.x +
+				DrawUtils::HudCharacterWidth(m_parms.text, unicodeMessage);
 			MessageScanNextChar();
 
 			if (m_parms.x >= 0 && m_parms.y >= 0 && next <= ScreenWidth)
-				m_parms.x += DrawUtils::TextMessageDrawChar(m_parms.x, m_parms.y, m_parms.text, m_parms.r, m_parms.g, m_parms.b);
+				m_parms.x += DrawUtils::TextMessageDrawChar(m_parms.x,
+					m_parms.y, m_parms.text, m_parms.r, m_parms.g,
+					m_parms.b, 0.0f, unicodeMessage, m_parms.a);
 		}
 
 		m_parms.y += gHUD.GetCharHeight();

@@ -1,4 +1,4 @@
-// spectator_gui.cpp (GoldSrc-only, без Xash/Mobile)
+// spectator_gui.cpp (GoldSrc-only, Р±РµР· Xash/Mobile)
 
 #include "hud.h"
 #include "cl_util.h"
@@ -6,16 +6,14 @@
 #include "draw_util.h"
 
 #define XPOS(x)      ((x) / 16.0f)
-#define YPOS(y)      ((y) / 10.0f)
 #define INT_XPOS(x)  int(XPOS(x) * ScreenWidth)
-#define INT_YPOS(y)  int(YPOS(y) * ScreenHeight)
 
 DECLARE_MESSAGE(m_SpectatorGui, SpecHealth)
 DECLARE_MESSAGE(m_SpectatorGui, SpecHealth2)
 
 int CHudSpectatorGui::Init()
 {
-    // только сообщения; никаких команд и мобильных кнопок
+    // С‚РѕР»СЊРєРѕ СЃРѕРѕР±С‰РµРЅРёСЏ; РЅРёРєР°РєРёС… РєРѕРјР°РЅРґ Рё РјРѕР±РёР»СЊРЅС‹С… РєРЅРѕРїРѕРє
     HOOK_MESSAGE(SpecHealth);
     HOOK_MESSAGE(SpecHealth2);
 
@@ -28,13 +26,13 @@ int CHudSpectatorGui::Init()
 
 int CHudSpectatorGui::VidInit()
 {
-    // без текстур/RenderAPI
+    // Р±РµР· С‚РµРєСЃС‚СѓСЂ/RenderAPI
     return 1;
 }
 
 void CHudSpectatorGui::Shutdown()
 {
-    // ничего
+    // РЅРёС‡РµРіРѕ
 }
 
 // spectator_gui.cpp
@@ -42,43 +40,69 @@ void CHudSpectatorGui::UserCmd_ToggleSpectatorMenu() {}
 
 int CHudSpectatorGui::Draw(float flTime)
 {
-    if (!g_iUser1)  // не в режиме спектатора
+    if (!g_iUser1)  // РЅРµ РІ СЂРµР¶РёРјРµ СЃРїРµРєС‚Р°С‚РѕСЂР°
         return 1;
 
     CalcAllNeededData();
 
-    // верх/низ тёмные полосы
-    FillRGBABlend(0, 0, ScreenWidth, INT_YPOS(2), 0, 0, 0, 153);
-    FillRGBABlend(0, ScreenHeight - INT_YPOS(2), ScreenWidth, INT_YPOS(2), 0, 0, 0, 153);
+    // Velaron/Xash uses a logical scaled HUD, where INT_YPOS(2) and the font
+    // grow together. Steam GoldSrc reports physical resolution but keeps its
+    // console font nearly pixel-sized; at 1080p the old formula produced two
+    // mostly empty 216 px bars around 13 px text. Size the bars from the real
+    // font metrics instead.
+    const int textTall = max(gHUD.GetCharHeight(), 13);
+    const int lineGap = max(textTall / 3, 3);
+    const int topPadding = max(textTall, 10);
+    const int topBarTall = max(64,
+        topPadding * 2 + textTall * 2 + lineGap);
+    const int bottomBarTall = max(48, textTall * 3);
+    const int firstLineY = topPadding;
+    const int secondLineY = firstLineY + textTall + lineGap;
+
+    FillRGBABlend(0, 0, ScreenWidth, topBarTall, 0, 0, 0, 153);
+    FillRGBABlend(0, ScreenHeight - bottomBarTall,
+        ScreenWidth, bottomBarTall, 0, 0, 0, 153);
 
     int r = 255, g = 140, b = 0;
 
-    // разделитель и подписи справа
-    FillRGBABlend(INT_XPOS(12.5), INT_YPOS(0.5), 1, INT_YPOS(1.0), r, g, b, 255);
-    DrawUtils::DrawHudString(INT_XPOS(12.5) + 10, INT_YPOS(0.25), ScreenWidth, label.m_szMap, r, g, b);
+    // СЂР°Р·РґРµР»РёС‚РµР»СЊ Рё РїРѕРґРїРёСЃРё СЃРїСЂР°РІР°
+    const int dividerTop = max(firstLineY - lineGap, 0);
+    const int dividerTall = secondLineY + textTall + lineGap - dividerTop;
+    FillRGBABlend(INT_XPOS(12.5), dividerTop, 1, dividerTall,
+        r, g, b, 255);
+    DrawUtils::DrawHudString(INT_XPOS(12.5) + 10, firstLineY,
+        ScreenWidth, label.m_szMap, r, g, b);
 
     if (!m_bBombPlanted)
-        DrawUtils::DrawHudString(INT_XPOS(12.5) + 10, INT_YPOS(0.5), ScreenWidth, label.m_szTimer, r, g, b);
+        DrawUtils::DrawHudString(INT_XPOS(12.5) + 10, secondLineY,
+            ScreenWidth, label.m_szTimer, r, g, b);
 
-    // счёт команд
+    // СЃС‡С‘С‚ РєРѕРјР°РЅРґ
     int len = DrawUtils::HudStringLen("Counter-Terrorists:");
-    DrawUtils::DrawHudString(INT_XPOS(12.5) - len - 50, INT_YPOS(0.25), INT_XPOS(12.5) - 50, "Counter-Terrorists:", r, g, b);
-    DrawUtils::DrawHudString(INT_XPOS(12.5) - len - 50, INT_YPOS(0.5), INT_XPOS(12.5) - 50, "Terrorists:", r, g, b);
-    DrawUtils::DrawHudNumberString(INT_XPOS(12.5) - 10, INT_YPOS(0.25), INT_XPOS(12.5) - 50, label.m_iCounterTerrorists, r, g, b);
-    DrawUtils::DrawHudNumberString(INT_XPOS(12.5) - 10, INT_YPOS(0.5), INT_XPOS(12.5) - 50, label.m_iTerrorists, r, g, b);
+    DrawUtils::DrawHudString(INT_XPOS(12.5) - len - 50, firstLineY,
+        INT_XPOS(12.5) - 50, "Counter-Terrorists:", r, g, b);
+    DrawUtils::DrawHudString(INT_XPOS(12.5) - len - 50, secondLineY,
+        INT_XPOS(12.5) - 50, "Terrorists:", r, g, b);
+    DrawUtils::DrawHudNumberString(INT_XPOS(12.5) - 10, firstLineY,
+        INT_XPOS(12.5) - 50, label.m_iCounterTerrorists, r, g, b);
+    DrawUtils::DrawHudNumberString(INT_XPOS(12.5) - 10, secondLineY,
+        INT_XPOS(12.5) - 50, label.m_iTerrorists, r, g, b);
 
-    // имя/хп наблюдаемого
+    // РёРјСЏ/С…Рї РЅР°Р±Р»СЋРґР°РµРјРѕРіРѕ
     int cr, cg, cb;
     GetTeamColor(cr, cg, cb, g_PlayerExtraInfo[g_iUser2].teamnumber);
-    int nameLen = DrawUtils::HudStringLen(label.m_szNameAndHealth);
-    DrawUtils::DrawHudString(ScreenWidth * 0.5f - nameLen * 0.5f, INT_YPOS(9) - gHUD.GetCharHeight() * 0.5f,
+    int nameLen = 0, nameTall = textTall;
+    DrawUtils::ConsoleStringSize(label.m_szNameAndHealth, &nameLen, &nameTall);
+    const int nameY = ScreenHeight - bottomBarTall +
+        (bottomBarTall - nameTall) / 2;
+    DrawUtils::DrawHudString(ScreenWidth * 0.5f - nameLen * 0.5f, nameY,
         ScreenWidth, label.m_szNameAndHealth, cr, cg, cb);
     return 1;
 }
 
 void CHudSpectatorGui::CalcAllNeededData()
 {
-    // карта
+    // РєР°СЂС‚Р°
     if (!label.m_szMap[0]) {
         static char stripped[55];
         const char* lvl = gEngfuncs.pfnGetLevelName(); // "maps/%s.bsp"
@@ -89,7 +113,7 @@ void CHudSpectatorGui::CalcAllNeededData()
         snprintf(label.m_szMap, sizeof(label.m_szMap), "Map: %s", stripped);
     }
 
-    // счёт берём из g_TeamInfo (как у тебя)
+    // СЃС‡С‘С‚ Р±РµСЂС‘Рј РёР· g_TeamInfo (РєР°Рє Сѓ С‚РµР±СЏ)
     label.m_iCounterTerrorists = 0;
     label.m_iTerrorists = 0;
     for (int i = 1; i <= gHUD.m_Scoreboard.m_iNumTeams; ++i) {
@@ -99,14 +123,14 @@ void CHudSpectatorGui::CalcAllNeededData()
         }
     }
 
-    // таймер
+    // С‚Р°Р№РјРµСЂ
     if (!m_bBombPlanted) {
         const int remain = max(0, (int)(gHUD.m_Timer.m_iTime + gHUD.m_Timer.m_fStartTime - gHUD.m_flTime));
         const int mm = remain / 60, ss = remain % 60;
         snprintf(label.m_szTimer, sizeof(label.m_szTimer), "%d:%02d", mm, ss);
     }
 
-    // текущий игрок
+    // С‚РµРєСѓС‰РёР№ РёРіСЂРѕРє
     if (g_iUser2 > 0 && g_iUser2 < MAX_PLAYERS) {
         hud_player_info_t info; GetPlayerInfo(g_iUser2, &info);
         snprintf(label.m_szNameAndHealth, sizeof(label.m_szNameAndHealth), "%s (%d)",

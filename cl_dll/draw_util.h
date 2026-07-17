@@ -27,6 +27,8 @@
 */
 #pragma once
 #include <cl_util.h>
+#include <stddef.h>
+#include "cs_vgui2.h"
 #ifndef DRAW_UTIL_H
 #define DRAW_UTIL_H
 // Drawing primitives
@@ -44,6 +46,12 @@ extern cvar_t *cl_charset;
 
 int Con_UtfProcessChar( int in );
 int Con_UtfProcessCharForce( int in );
+
+// Steam GoldSrc's narrow HUD font expects a legacy single-byte string. Keep
+// server-supplied CP1251/ANSI text intact, but convert valid UTF-8 before it is
+// passed to the engine's console-font drawing functions.
+const char *CS16_LegacyHudText( const char *source, char *destination, size_t destinationSize );
+bool CS16_HudTextNeedsUnicode( const char *text );
 
 class DrawUtils
 {
@@ -73,6 +81,18 @@ public:
 
 	static int HudStringLen( const char *szIt, float scale = 1 );
 
+	static inline int HudCharacterWidth( int number, bool forceUnicode = false )
+	{
+		if ( forceUnicode || number >= 0x80 )
+		{
+			char text[2] = { (char)number, 0 };
+			int wide = 0, tall = 0;
+			if ( CS16VGUI2_GetHudStringSize( text, &wide, &tall ) )
+				return wide;
+		}
+		return gHUD.GetCharWidth( (unsigned char)number );
+	}
+
 	// legacy shit came with Valve
 	static inline int GetNumWidth(int iNumber, int iFlags)
 	{
@@ -96,6 +116,17 @@ public:
 
 	static inline int DrawConsoleString(int x, int y, const char *string)
 	{
+		char converted[4096];
+		string = CS16_LegacyHudText( string, converted, sizeof(converted) );
+		if ( CS16_HudTextNeedsUnicode( string ) )
+		{
+			const int wide = CS16VGUI2_DrawHudString( x, y, string,
+				(int)(color[0] * 255), (int)(color[1] * 255),
+				(int)(color[2] * 255), 255 );
+			if ( wide >= 0 )
+				return x + wide;
+		}
+
 		if ( gHUD.hud_textmode->value )
 		{
 			int ret  = DrawHudString( x, y, 9999, (char *)string, color[0] * 255, color[1] * 255, color[2] * 255 );
@@ -108,22 +139,29 @@ public:
 
 	static inline void SetConsoleTextColor( float r, float g, float b )
 	{
-		if ( gHUD.hud_textmode->value )
-			color[0] = r, color[1] = g, color[2] = b;
-		else
+		color[0] = r, color[1] = g, color[2] = b;
+		if ( !gHUD.hud_textmode->value )
 			gEngfuncs.pfnDrawSetTextColor( r, g, b );
 	}
 
 	static inline void SetConsoleTextColor( unsigned char r, unsigned char g, unsigned char b )
 	{
-		if ( gHUD.hud_textmode->value )
-			color[0] = r / 255.0f, color[1] = g / 255.0f, color[2] = b / 255.0f;
-		else
+		color[0] = r / 255.0f, color[1] = g / 255.0f, color[2] = b / 255.0f;
+		if ( !gHUD.hud_textmode->value )
 			gEngfuncs.pfnDrawSetTextColor( r / 255.0f, g / 255.0f, b / 255.0f );
 	}
 
 	static inline int ConsoleStringLen(  const char *szIt )
 	{
+		char converted[4096];
+		szIt = CS16_LegacyHudText( szIt, converted, sizeof(converted) );
+		if ( CS16_HudTextNeedsUnicode( szIt ) )
+		{
+			int wide = 0, tall = 0;
+			if ( CS16VGUI2_GetHudStringSize( szIt, &wide, &tall ) )
+				return wide;
+		}
+
 		if ( gHUD.hud_textmode->value )
 		{
 			return HudStringLen( (char *)szIt );
@@ -140,14 +178,28 @@ public:
 
 	static inline void ConsoleStringSize( const char *szIt, int *width, int *height )
 	{
+		char converted[4096];
+		szIt = CS16_LegacyHudText( szIt, converted, sizeof(converted) );
+		if ( CS16_HudTextNeedsUnicode( szIt ) &&
+			CS16VGUI2_GetHudStringSize( szIt, width, height ) )
+			return;
+
 		if ( gHUD.hud_textmode->value )
 			*height = 13, *width = HudStringLen( (char *)szIt );
 		else
 			gEngfuncs.pfnDrawConsoleStringLen( szIt, width, height );
 	}
 
-	static inline int TextMessageDrawChar( int x, int y, int number, int r, int g, int b, float scale = 0.0f )
+	static inline int TextMessageDrawChar( int x, int y, int number, int r, int g, int b,
+		float scale = 0.0f, bool forceUnicode = false, int alpha = 255 )
 	{
+		if ( forceUnicode || number >= 0x80 )
+		{
+			char text[2] = { (char)number, 0 };
+			const int wide = CS16VGUI2_DrawHudString( x, y, text, r, g, b, alpha );
+			if ( wide >= 0 )
+				return wide;
+		}
 		return gEngfuncs.pfnDrawCharacter( x, y, number, r, g, b );
 	}
 
