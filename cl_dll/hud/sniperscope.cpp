@@ -29,41 +29,18 @@ version.
 */
 
 #include "hud.h"
-#include "triangleapi.h"
-#include "r_efx.h"
 #include "cl_util.h"
-
-#include "draw_util.h"
+#include "pm_shared.h"
 
 #include <math.h>
-
-namespace
-{
-void DrawScopeCorner(float outerX, float outerY, float centerX, float centerY,
-	float radius, float startAngle, float endAngle)
-{
-	triangleapi_t* tri = gEngfuncs.pTriAPI;
-	if (!tri)
-		return;
-
-	const int segments = 24;
-	tri->Begin(TRI_TRIANGLE_FAN);
-	tri->Vertex3f(outerX, outerY, 0.0f);
-	for (int i = 0; i <= segments; ++i)
-	{
-		const float fraction = (float)i / (float)segments;
-		const float angle = startAngle + (endAngle - startAngle) * fraction;
-		tri->Vertex3f(centerX + cosf(angle) * radius,
-			centerY + sinf(angle) * radius, 0.0f);
-	}
-	tri->End();
-}
-}
 
 int CHudSniperScope::Init()
 {
 	gHUD.AddHudElem(this);
-	m_iFlags = HUD_DRAW;
+	// Steam draws the scope explicitly from CHudAmmo so the mask and reticle
+	// always share one traversal and render order. Keep the element registered
+	// for VidInit/Shutdown, but do not draw it a second time from the HUD list.
+	m_iFlags = 0;
 	m_iScopeArc[0] = m_iScopeArc[1] =m_iScopeArc[2] = m_iScopeArc[3]  = 0;
 	return 1;
 }
@@ -80,6 +57,9 @@ int CHudSniperScope::VidInit()
 
 int CHudSniperScope::Draw(float)
 {
+	if (g_iUser1 && g_iUser1 != OBS_IN_EYE)
+		return 1;
+
 	if (gHUD.m_iFOV <= 0 || gHUD.m_iFOV > 40)
 		return 1;
 
@@ -94,30 +74,44 @@ int CHudSniperScope::Draw(float)
 	const float top = centery - radius;
 	const float bottom = centery + radius;
 
-	// Black bars outside the largest centered square.
-	gEngfuncs.pfnFillRGBA(0, 0, (int)left + 1, ScreenHeight, 0, 0, 0, 255);
-	gEngfuncs.pfnFillRGBA((int)right, 0, ScreenWidth - (int)right, ScreenHeight, 0, 0, 0, 255);
-	gEngfuncs.pfnFillRGBA((int)left, 0, (int)(right - left), (int)top + 1, 0, 0, 0, 255);
-	gEngfuncs.pfnFillRGBA((int)left, (int)bottom, (int)(right - left), ScreenHeight - (int)bottom, 0, 0, 0, 255);
+	// Steam GoldSrc's TriAPI vertices participate in renderer state left by the
+	// 3D scene, so a triangle-fan mask can be depth-tested against the map and
+	// appear or disappear as the camera moves. Build the same circular mask
+	// entirely from HUD-space FillRGBA bands instead. The band count is capped
+	// near the original 540-line reference density to keep the edge smooth at
+	// every resolution without tying it to world rendering.
+	const int topPixel = max(0, (int)top);
+	const int bottomPixel = min(ScreenHeight, (int)ceilf(bottom));
+	const int bandHeight = max(1, (int)ceilf(diameter / 540.0f));
 
-	if (gEngfuncs.pTriAPI)
+	if (topPixel > 0)
+		gEngfuncs.pfnFillRGBABlend(0, 0, ScreenWidth, topPixel, 0, 0, 0, 255);
+	if (bottomPixel < ScreenHeight)
+		gEngfuncs.pfnFillRGBABlend(0, bottomPixel, ScreenWidth,
+			ScreenHeight - bottomPixel, 0, 0, 0, 255);
+
+	for (int y = topPixel; y < bottomPixel; y += bandHeight)
 	{
-		triangleapi_t* tri = gEngfuncs.pTriAPI;
-		tri->RenderMode(kRenderNormal);
-		tri->Brightness(1.0f);
-		tri->Color4ub(0, 0, 0, 255);
-		tri->CullFace(TRI_NONE);
+		const int height = min(bandHeight, bottomPixel - y);
+		const float dy = (y + height * 0.5f) - centery;
+		const float inside = max(0.0f, radius * radius - dy * dy);
+		const float halfWidth = sqrtf(inside);
+		const int leftEdge = max(0, (int)floorf(centerx - halfWidth));
+		const int rightEdge = min(ScreenWidth, (int)ceilf(centerx + halfWidth));
 
-		const float pi = 3.14159265358979323846f;
-		DrawScopeCorner(left, top, centerx, centery, radius, -pi * 0.5f, -pi);
-		DrawScopeCorner(right, top, centerx, centery, radius, 0.0f, -pi * 0.5f);
-		DrawScopeCorner(right, bottom, centerx, centery, radius, pi * 0.5f, 0.0f);
-		DrawScopeCorner(left, bottom, centerx, centery, radius, pi, pi * 0.5f);
+		if (leftEdge > 0)
+			gEngfuncs.pfnFillRGBABlend(0, y, leftEdge, height, 0, 0, 0, 255);
+		if (rightEdge < ScreenWidth)
+			gEngfuncs.pfnFillRGBABlend(rightEdge, y, ScreenWidth - rightEdge,
+				height, 0, 0, 0, 255);
 	}
 
-	// Pixel-perfect crosshair lines across the circular opening.
-	gEngfuncs.pfnFillRGBA((int)left, (int)centery, (int)(right - left), 1, 0, 0, 0, 255);
-	gEngfuncs.pfnFillRGBA((int)centerx, (int)top, 1, (int)(bottom - top), 0, 0, 0, 255);
+	// Match the original scope_arc renderer's one-pixel offsets. The centered
+	// sniper_scope.spr remains unobscured and supplies its dotted reticle.
+	gEngfuncs.pfnFillRGBABlend((int)left, (int)centery + 1,
+		(int)(right - left), 1, 0, 0, 0, 255);
+	gEngfuncs.pfnFillRGBABlend((int)centerx - 1, (int)top,
+		1, (int)(bottom - top), 0, 0, 0, 255);
 
 	return 1;
 }

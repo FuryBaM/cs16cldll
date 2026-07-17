@@ -1055,6 +1055,10 @@ int CHudAmmo::Draw(float flTime)
 	if (gHUD.m_iFOV > 40)
 	{
 		HideCrosshair(); // hide static
+		// pfnSetCrosshair keeps the last zoom sprite in the engine until it is
+		// explicitly cleared. Without this reset, sniper_scope.spr remains on
+		// screen after the weapon has returned to its normal FOV.
+		gEngfuncs.pfnSetCrosshair(0, nullrc, 0, 0, 0);
 
 		// draw a dynamic crosshair
 		DrawCrosshair();
@@ -1063,8 +1067,17 @@ int CHudAmmo::Draw(float flTime)
 	{
 		if (m_pWeapon)
 		{
-			gEngfuncs.pfnSetCrosshair(m_pWeapon->hZoomedCrosshair, m_pWeapon->rcZoomedCrosshair, 255, 255, 255);
+			// Draw the Steam fallback mask in the same HUD element and frame as
+			// the zoom reticle. The standalone scope element is not traversed
+			// reliably by every Steam GoldSrc HUD path.
+			gHUD.m_SniperScope.Draw(flTime);
 
+			// Velaron keeps the zoom sprite in CHudAmmo and draws it from the HUD.
+			// Steam's pfnSetCrosshair draws it at a fixed 256x256 size, so clear
+			// the engine copy and use our resolution-aware path instead.
+			gEngfuncs.pfnSetCrosshair(0, nullrc, 0, 0, 0);
+			SetCrosshair(m_pWeapon->hZoomedCrosshair,
+				m_pWeapon->rcZoomedCrosshair, 255, 255, 255);
 			DrawSpriteCrosshair();
 		}
 	}
@@ -1171,8 +1184,47 @@ void CHudAmmo::DrawSpriteCrosshair()
 {
 	int x, y;
 
+	if (g_iUser1 && g_iUser1 != OBS_IN_EYE)
+		return;
+
 	if (!m_hStaticSpr)
 		return;
+
+	const bool sniperZoom = m_pWeapon && gHUD.m_iFOV <= 40
+		&& (m_pWeapon->iId == WEAPON_AWP
+			|| m_pWeapon->iId == WEAPON_SCOUT
+			|| m_pWeapon->iId == WEAPON_SG550
+			|| m_pWeapon->iId == WEAPON_G3SG1);
+
+	if (sniperZoom && gEngfuncs.pTriAPI)
+	{
+		model_s *sprite = (model_s *)gEngfuncs.GetSpritePointer(m_hStaticSpr);
+		if (sprite)
+		{
+			// At the original 640x480 reference resolution the sniper reticle is
+			// 256 pixels. Preserve that proportion instead of leaving it tiny on
+			// a 1080p/1440p screen.
+			const float scale = (float)min(ScreenWidth, ScreenHeight) / 480.0f;
+			const float width = m_rcStaticRc.Width() * scale;
+			const float height = m_rcStaticRc.Height() * scale;
+			const float left = (ScreenWidth - width) * 0.5f;
+			const float top = (ScreenHeight - height) * 0.5f;
+
+			triangleapi_t *tri = gEngfuncs.pTriAPI;
+			tri->RenderMode(kRenderTransTexture);
+			tri->Brightness(1.0f);
+			tri->Color4ub(m_staticRgba.r, m_staticRgba.g, m_staticRgba.b, 255);
+			tri->CullFace(TRI_NONE);
+			tri->SpriteTexture(sprite, 0);
+			tri->Begin(TRI_QUADS);
+			tri->TexCoord2f(0.0f, 0.0f); tri->Vertex3f(left, top, 0.0f);
+			tri->TexCoord2f(1.0f, 0.0f); tri->Vertex3f(left + width, top, 0.0f);
+			tri->TexCoord2f(1.0f, 1.0f); tri->Vertex3f(left + width, top + height, 0.0f);
+			tri->TexCoord2f(0.0f, 1.0f); tri->Vertex3f(left, top + height, 0.0f);
+			tri->End();
+			return;
+		}
+	}
 
 	gEngfuncs.pfnSPR_Set(m_hStaticSpr, m_staticRgba.r, m_staticRgba.g, m_staticRgba.b);
 

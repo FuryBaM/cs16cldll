@@ -1,8 +1,8 @@
 // Lightweight GoldSrc voice state manager.
 //
 // This target intentionally does not use the obsolete VGUI1 scoreboard/menu
-// implementation. Voice muting and the in-world speaker sprite still work,
-// while speaker-name panels are left to the game's HUD.
+// implementation. Voice state, the in-world speaker sprite, and the compact
+// speaker-name HUD are drawn directly by the client.
 
 #ifndef VOICE_STATUS_H
 #define VOICE_STATUS_H
@@ -30,6 +30,7 @@ public:
 
 	int Init(IVoiceStatusHelper *pHelper);
 	int VidInit() override;
+	int Draw(float flTime) override;
 	void Shutdown() override;
 
 	void Frame(double frameTime);
