@@ -1208,7 +1208,8 @@ void HUD_WeaponsPostThink( local_state_s *from, local_state_s *to, usercmd_t *cm
 		pCurrent->m_iShotsFired			= pfrom->m_fInZoom;
 	}
 
-	if( from->client.vuser4.x < 0 || from->client.vuser4.x > MAX_AMMO_TYPES )
+	// Velaron/cs16-client adf131d: MAX_AMMO_TYPES is one past the last valid index.
+	if( from->client.vuser4.x < 0 || from->client.vuser4.x >= MAX_AMMO_TYPES )
 		pWeapon->m_iPrimaryAmmoType = 0;
 	else
 	{
