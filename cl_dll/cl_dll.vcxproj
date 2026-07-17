@@ -52,21 +52,21 @@
     <ClCompile Include="ammo_secondary.cpp" />
     <ClCompile Include="battery.cpp" />
     <ClCompile Include="cdll_int.cpp" />
-    <ClCompile Include="cs_localize.cpp" />
-    <ClCompile Include="cs_vgui_bridge.cpp" />
-    <ClCompile Include="cs_vgui2.cpp" />
-    <ClCompile Include="cs_vgui2_client.cpp">
+    <ClCompile Include="ui\common\cs_localize.cpp" />
+    <ClCompile Include="ui\vgui1\cs_vgui_bridge.cpp" />
+    <ClCompile Include="ui\vgui2\cs_vgui2.cpp" />
+    <ClCompile Include="ui\vgui2\cs_vgui2_client.cpp">
       <AdditionalIncludeDirectories>$(SolutionDir)external\hl1_source_sdk\common;$(SolutionDir)external\hl1_source_sdk\public;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>MATHLIB_USE_C_ASSERT;NO_MALLOC_OVERRIDE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
-    <ClCompile Include="cs_vgui_viewport.cpp" />
+    <ClCompile Include="ui\vgui1\cs_vgui_viewport.cpp" />
     <ClCompile Include="com_weapons.cpp" />
     <ClCompile Include="cs_wpn\cs_weapons.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="death.cpp" />
     <ClCompile Include="demo.cpp" />
-    <ClCompile Include="draw_util.cpp" />
+    <ClCompile Include="ui\common\draw_util.cpp" />
     <ClCompile Include="entity.cpp" />
     <ClCompile Include="events.cpp" />
     <ClCompile Include="events\event_ak47.cpp" />
@@ -157,14 +157,14 @@
     <ClInclude Include="ammohistory.h" />
     <ClInclude Include="camera.h" />
     <ClInclude Include="cl_dll.h" />
-    <ClInclude Include="cs_vgui.h" />
-    <ClInclude Include="cs_vgui2.h" />
-    <ClInclude Include="cs_vgui2_client.h" />
-    <ClInclude Include="cs_localize.h" />
+    <ClInclude Include="ui\vgui1\cs_vgui.h" />
+    <ClInclude Include="ui\vgui2\cs_vgui2.h" />
+    <ClInclude Include="ui\vgui2\cs_vgui2_client.h" />
+    <ClInclude Include="ui\common\cs_localize.h" />
     <ClInclude Include="com_weapons.h" />
     <ClInclude Include="csprite.h" />
     <ClInclude Include="demo.h" />
-    <ClInclude Include="draw_util.h" />
+    <ClInclude Include="ui\common\draw_util.h" />
     <ClInclude Include="events.h" />
     <ClInclude Include="eventscripts.h" />
     <ClInclude Include="ev_hldm.h" />
@@ -251,7 +251,7 @@
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <LanguageStandard_C>Default</LanguageStandard_C>
-      <AdditionalIncludeDirectories>$(SolutionDir)dlls;$(SolutionDir)cl_dll;$(SolutionDir)public;$(SolutionDir)common;$(SolutionDir)pm_shared;$(SolutionDir)engine;$(SolutionDir)utils\vgui\include;$(SolutionDir)game_shared;$(SolutionDir)external;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)dlls;$(SolutionDir)cl_dll;$(SolutionDir)cl_dll\ui\common;$(SolutionDir)cl_dll\ui\vgui1;$(SolutionDir)cl_dll\ui\vgui2;$(SolutionDir)public;$(SolutionDir)common;$(SolutionDir)pm_shared;$(SolutionDir)engine;$(SolutionDir)utils\vgui\include;$(SolutionDir)game_shared;$(SolutionDir)external;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
       <ShowIncludes>false</ShowIncludes>
@@ -274,7 +274,7 @@
       <ConformanceMode>Default</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(SolutionDir)dlls;$(SolutionDir)cl_dll;$(SolutionDir)public;$(SolutionDir)common;$(SolutionDir)pm_shared;$(SolutionDir)engine;$(SolutionDir)utils\vgui\include;$(SolutionDir)game_shared;$(SolutionDir)external;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)dlls;$(SolutionDir)cl_dll;$(SolutionDir)cl_dll\ui\common;$(SolutionDir)cl_dll\ui\vgui1;$(SolutionDir)cl_dll\ui\vgui2;$(SolutionDir)public;$(SolutionDir)common;$(SolutionDir)pm_shared;$(SolutionDir)engine;$(SolutionDir)utils\vgui\include;$(SolutionDir)game_shared;$(SolutionDir)external;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <LanguageStandard_C>Default</LanguageStandard_C>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
