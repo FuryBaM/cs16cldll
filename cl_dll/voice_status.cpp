@@ -4,6 +4,7 @@
 #include "r_efx.h"
 #include "entity_types.h"
 #include "draw_util.h"
+#include "platform/steam_integration.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -177,19 +178,30 @@ int CVoiceStatus::Draw(float)
 		m_pHelper->GetPlayerTextColor(playerIndex, teamColor);
 
 		const int textWidth = DrawUtils::HudStringLen(info.name);
-		const int rowWidth = 4 + iconWidth + iconGap + textWidth + 6;
+		const int avatarSize = max(12, rowHeight - 4);
+		const int avatarGap = 4;
+		const int rowWidth = 7 + avatarSize + avatarGap + iconWidth + iconGap +
+			textWidth + 6;
 		const int x = max(0, ScreenWidth - rowWidth - 8);
 
-		FillRGBA(x, y, rowWidth, rowHeight,
-			teamColor[0], teamColor[1], teamColor[2], 180);
+		FillRGBABlend(x, y, rowWidth, rowHeight, 0, 0, 0, 150);
+		FillRGBABlend(x, y, 3, rowHeight,
+			teamColor[0], teamColor[1], teamColor[2], 230);
+		const int avatarX = x + 5;
+		const int avatarY = y + (rowHeight - avatarSize) / 2;
+		FillRGBABlend(avatarX, avatarY, avatarSize, avatarSize,
+			teamColor[0], teamColor[1], teamColor[2], 90);
+		CS16Steam_QueueAvatar(playerIndex, info.m_nSteamID, avatarX, avatarY,
+			avatarSize, 255, gHUD.m_flTime);
+		const int iconX = avatarX + avatarSize + avatarGap;
 
 		if (m_VoiceHeadModel)
 		{
 			SPR_Set(m_VoiceHeadModel, 255, 255, 255);
-			SPR_DrawAdditive(0, x + 2, y + (rowHeight - iconHeight) / 2, NULL);
+			SPR_DrawAdditive(0, iconX, y + (rowHeight - iconHeight) / 2, NULL);
 		}
 
-		DrawUtils::DrawHudString(x + 4 + iconWidth + iconGap,
+		DrawUtils::DrawHudString(iconX + iconWidth + iconGap,
 			y + (rowHeight - gHUD.m_iFontHeight) / 2,
 			ScreenWidth - 8, info.name, 255, 255, 255);
 		y += rowHeight + 2;

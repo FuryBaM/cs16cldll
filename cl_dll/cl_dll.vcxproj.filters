@@ -73,6 +73,12 @@
     <Filter Include="Исходные файлы\ui\vgui2">
       <UniqueIdentifier>{5a666464-c76c-41a7-8ab6-bccf63e673eb}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Исходные файлы\platform">
+      <UniqueIdentifier>{680C84C2-EB1B-4C59-82AE-9432D6E77F89}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Файлы заголовков\platform">
+      <UniqueIdentifier>{A4C4BA49-1264-4CCF-A99A-667E7676AF06}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Файлы заголовков\ui">
       <UniqueIdentifier>{fbfa7100-4e77-46cf-bec4-7688f404f316}</UniqueIdentifier>
     </Filter>
@@ -119,6 +125,12 @@
     </ClCompile>
     <ClCompile Include="ui\vgui1\cs_vgui_viewport.cpp">
       <Filter>Исходные файлы\ui\vgui1</Filter>
+    </ClCompile>
+    <ClCompile Include="platform\steam_integration.cpp">
+      <Filter>Исходные файлы\platform</Filter>
+    </ClCompile>
+    <ClCompile Include="platform\discord_rpc.cpp">
+      <Filter>Исходные файлы\platform</Filter>
     </ClCompile>
     <ClCompile Include="com_weapons.cpp">
       <Filter>Исходные файлы\cl_dll</Filter>
@@ -619,6 +631,12 @@
     </ClInclude>
     <ClInclude Include="global_consts.h">
       <Filter>Файлы заголовков\cl_dll</Filter>
+    </ClInclude>
+    <ClInclude Include="platform\steam_integration.h">
+      <Filter>Файлы заголовков\platform</Filter>
+    </ClInclude>
+    <ClInclude Include="platform\discord_rpc.h">
+      <Filter>Файлы заголовков\platform</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

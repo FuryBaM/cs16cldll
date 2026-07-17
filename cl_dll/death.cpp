@@ -36,12 +36,16 @@ struct DeathNoticeItem {
 	float* KillerColor;
 	float* VictimColor;
 	int iHeadShotId;
+	int iKiller;
+	int iVictim;
+	float flStartTime;
 };
 
-#define MAX_DEATHNOTICES	4
+#define MAX_DEATHNOTICES	6
 static int DEATHNOTICE_DISPLAY_TIME = 6;
 
-#define DEATHNOTICE_TOP		32
+#define DEATHNOTICE_TOP		38
+#define DEATHNOTICE_ROW_HEIGHT 24
 
 DeathNoticeItem rgDeathNoticeList[MAX_DEATHNOTICES + 1];
 
@@ -91,62 +95,76 @@ int CHudDeathNotice::Draw(float flTime)
 			continue;
 		}
 
-		rgDeathNoticeList[i].flDisplayTime = min(rgDeathNoticeList[i].flDisplayTime, flTime + DEATHNOTICE_DISPLAY_TIME);
+		DeathNoticeItem& notice = rgDeathNoticeList[i];
+		float fade = 1.0f;
+		const float remaining = notice.flDisplayTime - flTime;
+		if (remaining < 0.75f)
+			fade = max(0.0f, remaining / 0.75f);
+		const float age = flTime - notice.flStartTime;
+		if (age < 0.12f)
+			fade *= max(0.0f, age / 0.12f);
 
-		// Hide when scoreboard drawing. It will break triapi
-		//if ( gViewPort && gViewPort->AllowedToPrintText() )
-		//if ( !gHUD.m_iNoConsolePrint )
 		{
-			// Draw the death notice
 			if (!g_iUser1)
-			{
-				y = YRES(DEATHNOTICE_TOP) + 2 + (20 * i);  //!!!
-			}
+				y = YRES(DEATHNOTICE_TOP) + 2 + (DEATHNOTICE_ROW_HEIGHT * i);
 			else
+				y = ScreenHeight / 5 + 2 + (DEATHNOTICE_ROW_HEIGHT * i);
+
+			int id = (notice.iId == -1) ? m_HUD_d_skull : notice.iId;
+			const int victimWidth = notice.bNonPlayerKill ? 0 :
+				DrawUtils::ConsoleStringLen(notice.szVictim);
+			const int killerWidth = notice.bSuicide ? 0 :
+				DrawUtils::ConsoleStringLen(notice.szKiller);
+			const int weaponWidth = gHUD.GetSpriteRect(id).Width();
+			const int headshotWidth = notice.iHeadShotId ?
+				gHUD.GetSpriteRect(m_HUD_d_headshot).Width() : 0;
+			const int contentWidth = killerWidth + weaponWidth + headshotWidth +
+				victimWidth + (notice.bSuicide ? 0 : 5);
+			x = ScreenWidth - contentWidth - 12;
+
+			const bool localEvent = notice.iKiller == gHUD.m_Scoreboard.m_iPlayerNum ||
+				notice.iVictim == gHUD.m_Scoreboard.m_iPlayerNum;
+			const int panelAlpha = static_cast<int>((localEvent ? 150 : 105) * fade);
+			FillRGBABlend(x - 7, y - 3, contentWidth + 13,
+				DEATHNOTICE_ROW_HEIGHT - 2, 0, 0, 0, panelAlpha);
+			if (localEvent)
+				FillRGBABlend(x - 7, y - 3, 3, DEATHNOTICE_ROW_HEIGHT - 2,
+					255, 160, 0, static_cast<int>(230 * fade));
+
+			if (!notice.bSuicide)
 			{
-				y = ScreenHeight / 5 + 2 + (20 * i);
+				if (notice.KillerColor)
+					DrawUtils::SetConsoleTextColor(notice.KillerColor[0] * fade,
+						notice.KillerColor[1] * fade, notice.KillerColor[2] * fade);
+				x = 5 + DrawUtils::DrawConsoleString(x, y, notice.szKiller);
 			}
 
-			int id = (rgDeathNoticeList[i].iId == -1) ? m_HUD_d_skull : rgDeathNoticeList[i].iId;
-			x = ScreenWidth - DrawUtils::ConsoleStringLen(rgDeathNoticeList[i].szVictim) - (gHUD.GetSpriteRect(id).Width());
-			if (rgDeathNoticeList[i].iHeadShotId)
-				x -= gHUD.GetSpriteRect(m_HUD_d_headshot).Width();
-
-			if (!rgDeathNoticeList[i].bSuicide)
+			r = localEvent ? 255 : 235; g = localEvent ? 175 : 110; b = 25;
+			if (notice.bTeamKill)
 			{
-				x -= (5 + DrawUtils::ConsoleStringLen(rgDeathNoticeList[i].szKiller));
-
-				// Draw killers name
-				if (rgDeathNoticeList[i].KillerColor)
-					DrawUtils::SetConsoleTextColor(rgDeathNoticeList[i].KillerColor[0], rgDeathNoticeList[i].KillerColor[1], rgDeathNoticeList[i].KillerColor[2]);
-				x = 5 + DrawUtils::DrawConsoleString(x, y, rgDeathNoticeList[i].szKiller);
+				r = 255; g = 45; b = 45;
 			}
+			r = static_cast<int>(r * fade);
+			g = static_cast<int>(g * fade);
+			b = static_cast<int>(b * fade);
 
-			r = 255;  g = 80;	b = 0;
-			if (rgDeathNoticeList[i].bTeamKill)
-			{
-				r = 10;	g = 240; b = 10;  // display it in sickly green
-			}
-
-			// Draw death weapon
 			SPR_Set(gHUD.GetSprite(id), r, g, b);
 			SPR_DrawAdditive(0, x, y, &gHUD.GetSpriteRect(id));
+			x += weaponWidth;
 
-			x += (gHUD.GetSpriteRect(id).Width());
-
-			if (rgDeathNoticeList[i].iHeadShotId)
+			if (notice.iHeadShotId)
 			{
 				SPR_Set(gHUD.GetSprite(m_HUD_d_headshot), r, g, b);
 				SPR_DrawAdditive(0, x, y, &gHUD.GetSpriteRect(m_HUD_d_headshot));
 				x += (gHUD.GetSpriteRect(m_HUD_d_headshot).Width());
 			}
 
-			// Draw victims name (if it was a player that was killed)
-			if (!rgDeathNoticeList[i].bNonPlayerKill)
+			if (!notice.bNonPlayerKill)
 			{
-				if (rgDeathNoticeList[i].VictimColor)
-					DrawUtils::SetConsoleTextColor(rgDeathNoticeList[i].VictimColor[0], rgDeathNoticeList[i].VictimColor[1], rgDeathNoticeList[i].VictimColor[2]);
-				x = DrawUtils::DrawConsoleString(x, y, rgDeathNoticeList[i].szVictim);
+				if (notice.VictimColor)
+					DrawUtils::SetConsoleTextColor(notice.VictimColor[0] * fade,
+						notice.VictimColor[1] * fade, notice.VictimColor[2] * fade);
+				x = DrawUtils::DrawConsoleString(x, y, notice.szVictim);
 			}
 		}
 	}
@@ -188,13 +206,15 @@ int CHudDeathNotice::MsgFunc_DeathMsg(const char* pszName, int iSize, void* pbuf
 		memmove(rgDeathNoticeList, rgDeathNoticeList + 1, sizeof(DeathNoticeItem) * MAX_DEATHNOTICES);
 		i = MAX_DEATHNOTICES - 1;
 	}
+	memset(&rgDeathNoticeList[i], 0, sizeof(rgDeathNoticeList[i]));
 
 	//if (gViewPort)
 		//gViewPort->GetAllPlayersInfo();
 	gHUD.m_Scoreboard.GetAllPlayersInfo();
 
 	// Get the Killer's name
-	const char* killer_name = g_PlayerInfoList[killer].name;
+	const char* killer_name = killer >= 1 && killer <= MAX_PLAYERS ?
+		g_PlayerInfoList[killer].name : NULL;
 	if (!killer_name)
 	{
 		killer_name = "";
@@ -210,7 +230,7 @@ int CHudDeathNotice::MsgFunc_DeathMsg(const char* pszName, int iSize, void* pbuf
 	// Get the Victim's name
 	const char* victim_name = NULL;
 	// If victim is -1, the killer killed a specific, non-player object (like a sentrygun)
-	if (((char)victim) != -1)
+	if (victim >= 1 && victim <= MAX_PLAYERS)
 		victim_name = g_PlayerInfoList[victim].name;
 	if (!victim_name)
 	{
@@ -225,7 +245,7 @@ int CHudDeathNotice::MsgFunc_DeathMsg(const char* pszName, int iSize, void* pbuf
 	}
 
 	// Is it a non-player object kill?
-	if (((char)victim) == -1)
+	if (victim == 255)
 	{
 		rgDeathNoticeList[i].bNonPlayerKill = true;
 
@@ -242,6 +262,9 @@ int CHudDeathNotice::MsgFunc_DeathMsg(const char* pszName, int iSize, void* pbuf
 	}
 
 	rgDeathNoticeList[i].iHeadShotId = headshot;
+	rgDeathNoticeList[i].iKiller = killer;
+	rgDeathNoticeList[i].iVictim = victim;
+	rgDeathNoticeList[i].flStartTime = gHUD.m_flTime;
 
 	// Find the sprite in the list
 	int spr = gHUD.GetSpriteIndex(killedwith);

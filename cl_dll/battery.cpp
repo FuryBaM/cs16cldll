@@ -73,6 +73,9 @@ int CHudBattery::MsgFunc_Battery(const char* pszName, int iSize, void* pbuf)
 
 int CHudBattery::Draw(float flTime)
 {
+	if (g_iUser1)
+		return 1;
+
 	if (gHUD.m_iHideHUDDisplay & HIDEHUD_HEALTH)
 		return 1;
 
@@ -113,7 +116,8 @@ int CHudBattery::Draw(float flTime)
 	DrawUtils::ScaleColors(r, g, b, a);
 
 	y = ScreenHeight - gHUD.m_iFontHeight - gHUD.m_iFontHeight / 2;
-	x = ScreenWidth / 5;
+	// Keep armor beside health on widescreen resolutions.
+	x = max(96, gHUD.m_iFontWidth * 5);
 
 	// make sure we have the right sprite handles
 	SPR_Set(m_hFull[m_enArmorType].spr, r, g, b);

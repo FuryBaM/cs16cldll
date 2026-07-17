@@ -41,7 +41,12 @@ enum
     MAX_RESOURCE_LABELS = 8,
     // HudText effects are emitted character-by-character. Several active
     // server messages plus ShowMenu can exceed 128 entries in one frame.
-    MAX_HUD_TEXT_DRAWS = 2048
+    MAX_HUD_TEXT_DRAWS = 2048,
+    MAX_HUD_IMAGE_DRAWS = 64,
+    MAX_HUD_RECT_DRAWS = 192,
+    MAX_HUD_AVATARS = 33,
+    MAX_HUD_AVATAR_SIDE = 64,
+    MAX_HUD_OVERVIEW_SIDE = 512
 };
 
 struct HudTextDraw
@@ -49,6 +54,33 @@ struct HudTextDraw
     int x, y;
     int r, g, b, a;
     char text[512];
+};
+
+struct HudImageDraw
+{
+    int playerIndex;
+    int x, y, size, alpha;
+};
+
+struct HudRectDraw
+{
+    int x, y, wide, tall;
+    int r, g, b, a;
+};
+
+struct HudOverviewDraw
+{
+    int x, y, wide, tall, alpha;
+    bool active;
+};
+
+struct HudAvatar
+{
+    unsigned long long steamId;
+    int wide, tall;
+    int textureId;
+    bool valid, dirty;
+    unsigned char rgba[MAX_HUD_AVATAR_SIDE * MAX_HUD_AVATAR_SIDE * 4];
 };
 
 class CCS16VGUI2Viewport;
@@ -202,14 +234,20 @@ public:
           m_visible(false), m_legacyCursorVisible(false),
           m_currentMenu(0), m_team(CS_TEAM_T),
           m_entryCount(0), m_hoveredEntry(-1), m_selectedEntry(-1),
-          m_hudTextDrawCount(0),
+          m_hudTextDrawCount(0), m_hudImageDrawCount(0),
+          m_hudRectDrawCount(0),
           m_hudFont(vgui2::INVALID_FONT), m_font(vgui2::INVALID_FONT),
           m_titleFont(vgui2::INVALID_FONT),
           m_infoFont(vgui2::INVALID_FONT),
           m_previewTexture(0), m_loadedPreviewEntry(-1),
-          m_logoTexture(0), m_logoLoaded(false)
+          m_logoTexture(0), m_logoLoaded(false),
+          m_overviewTexture(0), m_overviewWide(0), m_overviewTall(0),
+          m_overviewDirty(false), m_overviewRotateClockwise(false)
     {
         m_title[0] = '\0';
+        m_overviewPath[0] = '\0';
+        m_hudOverviewDraw.active = false;
+        memset(m_hudAvatars, 0, sizeof(m_hudAvatars));
         ResetLayout();
     }
 
@@ -285,10 +323,19 @@ public:
         m_titleFont = vgui2::INVALID_FONT;
         m_infoFont = vgui2::INVALID_FONT;
         m_hudTextDrawCount = 0;
+        m_hudImageDrawCount = 0;
+        m_hudRectDrawCount = 0;
+        m_hudOverviewDraw.active = false;
+        memset(m_hudAvatars, 0, sizeof(m_hudAvatars));
         m_previewTexture = 0;
         m_loadedPreviewEntry = -1;
         m_logoTexture = 0;
         m_logoLoaded = false;
+        m_overviewTexture = 0;
+        m_overviewWide = m_overviewTall = 0;
+        m_overviewDirty = false;
+        m_overviewRotateClockwise = false;
+        m_overviewPath[0] = '\0';
     }
 
     bool IsReady() const { return m_vpanel != 0; }
@@ -335,6 +382,9 @@ public:
         // before or after HUD_Redraw, so the preceding complete frame remains
         // available until the next HUD frame starts here.
         m_hudTextDrawCount = 0;
+        m_hudImageDrawCount = 0;
+        m_hudRectDrawCount = 0;
+        m_hudOverviewDraw.active = false;
         if (m_hudVPanel && m_panel)
         {
             // IPanel::Repaint is what schedules IClientPanel::PaintTraverse.
@@ -344,6 +394,97 @@ public:
             if (m_surface)
                 m_surface->Invalidate(m_hudVPanel);
         }
+    }
+
+    void SetHudAvatar(int playerIndex, unsigned long long steamId,
+        const unsigned char* rgba, int wide, int tall)
+    {
+        if (playerIndex <= 0 || playerIndex >= MAX_HUD_AVATARS || !rgba ||
+            wide <= 0 || tall <= 0 || wide > MAX_HUD_AVATAR_SIDE ||
+            tall > MAX_HUD_AVATAR_SIDE)
+            return;
+
+        HudAvatar& avatar = m_hudAvatars[playerIndex];
+        const int bytes = wide * tall * 4;
+        if (avatar.valid && avatar.steamId == steamId && avatar.wide == wide &&
+            avatar.tall == tall && !memcmp(avatar.rgba, rgba, bytes))
+            return;
+
+        avatar.steamId = steamId;
+        avatar.wide = wide;
+        avatar.tall = tall;
+        avatar.valid = true;
+        avatar.dirty = true;
+        memcpy(avatar.rgba, rgba, bytes);
+    }
+
+    void DrawHudAvatar(int playerIndex, int x, int y, int size, int alpha)
+    {
+        if (!m_surface || !m_hudVPanel || playerIndex <= 0 ||
+            playerIndex >= MAX_HUD_AVATARS || size <= 0 ||
+            !m_hudAvatars[playerIndex].valid ||
+            m_hudImageDrawCount >= MAX_HUD_IMAGE_DRAWS)
+            return;
+
+        HudImageDraw& draw = m_hudImageDraws[m_hudImageDrawCount++];
+        draw.playerIndex = playerIndex;
+        draw.x = x;
+        draw.y = y;
+        draw.size = size;
+        draw.alpha = max(0, min(alpha, 255));
+        if (m_hudImageDrawCount == 1)
+        {
+            m_panel->Repaint(m_hudVPanel);
+            m_surface->Invalidate(m_hudVPanel);
+        }
+    }
+
+    bool DrawHudOverview(const char* filename, bool rotateClockwise,
+        int x, int y, int wide, int tall, int alpha)
+    {
+        if (!m_surface || !m_hudVPanel || !filename || !filename[0] ||
+            wide <= 0 || tall <= 0)
+            return false;
+
+        if (stricmp(filename, m_overviewPath) ||
+            rotateClockwise != m_overviewRotateClockwise)
+        {
+            m_overviewWide = m_overviewTall = 0;
+            if (!CS16VGUI_LoadBMP(filename, m_overviewPixels,
+                sizeof(m_overviewPixels), MAX_HUD_OVERVIEW_SIDE,
+                rotateClockwise ? 1 : 0,
+                &m_overviewWide, &m_overviewTall))
+            {
+                m_overviewPath[0] = '\0';
+                return false;
+            }
+            strncpy(m_overviewPath, filename, sizeof(m_overviewPath));
+            m_overviewPath[sizeof(m_overviewPath) - 1] = '\0';
+            m_overviewRotateClockwise = rotateClockwise;
+            m_overviewDirty = true;
+        }
+
+        m_hudOverviewDraw.x = x;
+        m_hudOverviewDraw.y = y;
+        m_hudOverviewDraw.wide = wide;
+        m_hudOverviewDraw.tall = tall;
+        m_hudOverviewDraw.alpha = max(0, min(alpha, 255));
+        m_hudOverviewDraw.active = true;
+        m_panel->Repaint(m_hudVPanel);
+        m_surface->Invalidate(m_hudVPanel);
+        return true;
+    }
+
+    void DrawHudRect(int x, int y, int wide, int tall,
+        int r, int g, int b, int a)
+    {
+        if (!m_surface || !m_hudVPanel || wide <= 0 || tall <= 0 ||
+            m_hudRectDrawCount >= MAX_HUD_RECT_DRAWS)
+            return;
+        HudRectDraw& draw = m_hudRectDraws[m_hudRectDrawCount++];
+        draw.x = x; draw.y = y; draw.wide = wide; draw.tall = tall;
+        draw.r = max(0, min(r, 255)); draw.g = max(0, min(g, 255));
+        draw.b = max(0, min(b, 255)); draw.a = max(0, min(a, 255));
     }
 
     int DrawHudString(int x, int y, const char* text,
@@ -417,14 +558,73 @@ public:
 
     void PaintHudText()
     {
-        if (!m_surface || !m_hudVPanel || m_hudTextDrawCount == 0)
-            return;
-
-        EnsureFonts();
-        if (m_hudFont == vgui2::INVALID_FONT)
+        if (!m_surface || !m_hudVPanel ||
+            (m_hudTextDrawCount == 0 && m_hudImageDrawCount == 0 &&
+             m_hudRectDrawCount == 0 && !m_hudOverviewDraw.active))
             return;
 
         m_surface->PushMakeCurrent(m_hudVPanel, false);
+        if (m_hudOverviewDraw.active && m_overviewWide > 0 &&
+            m_overviewTall > 0)
+        {
+            const HudOverviewDraw& draw = m_hudOverviewDraw;
+            m_surface->DrawSetColor(29, 27, 22, 225);
+            m_surface->DrawFilledRect(draw.x, draw.y,
+                draw.x + draw.wide, draw.y + draw.tall);
+            if (!m_overviewTexture)
+                m_overviewTexture = m_surface->CreateNewTextureID(false);
+            if (m_overviewDirty && m_overviewTexture)
+            {
+                m_surface->DrawSetTextureRGBA(m_overviewTexture,
+                    m_overviewPixels, m_overviewWide, m_overviewTall, 1, true);
+                m_overviewDirty = false;
+            }
+            if (m_overviewTexture)
+            {
+                m_surface->DrawSetColor(255, 255, 255, draw.alpha);
+                m_surface->DrawSetTexture(m_overviewTexture);
+                m_surface->DrawTexturedRect(draw.x, draw.y,
+                    draw.x + draw.wide, draw.y + draw.tall);
+            }
+        }
+        for (int i = 0; i < m_hudRectDrawCount; ++i)
+        {
+            const HudRectDraw& draw = m_hudRectDraws[i];
+            m_surface->DrawSetColor(draw.r, draw.g, draw.b, draw.a);
+            m_surface->DrawFilledRect(draw.x, draw.y,
+                draw.x + draw.wide, draw.y + draw.tall);
+        }
+        for (int i = 0; i < m_hudImageDrawCount; ++i)
+        {
+            const HudImageDraw& draw = m_hudImageDraws[i];
+            HudAvatar& avatar = m_hudAvatars[draw.playerIndex];
+            if (!avatar.valid)
+                continue;
+            if (!avatar.textureId)
+                avatar.textureId = m_surface->CreateNewTextureID(true);
+            if (avatar.dirty && avatar.textureId)
+            {
+                m_surface->DrawSetTextureRGBA(avatar.textureId, avatar.rgba,
+                    avatar.wide, avatar.tall, 1, true);
+                avatar.dirty = false;
+            }
+            if (!avatar.textureId)
+                continue;
+            m_surface->DrawSetColor(255, 255, 255, draw.alpha);
+            m_surface->DrawSetTexture(avatar.textureId);
+            m_surface->DrawTexturedRect(draw.x, draw.y,
+                draw.x + draw.size, draw.y + draw.size);
+            m_surface->DrawSetColor(255, 160, 0, draw.alpha);
+            m_surface->DrawOutlinedRect(draw.x - 1, draw.y - 1,
+                draw.x + draw.size + 1, draw.y + draw.size + 1);
+        }
+
+        EnsureFonts();
+        if (m_hudFont == vgui2::INVALID_FONT)
+        {
+            m_surface->PopMakeCurrent(m_hudVPanel);
+            return;
+        }
         for (int i = 0; i < m_hudTextDrawCount; ++i)
         {
             const HudTextDraw& draw = m_hudTextDraws[i];
@@ -1870,6 +2070,9 @@ private:
     int m_selectedEntry;
     HudTextDraw m_hudTextDraws[MAX_HUD_TEXT_DRAWS];
     int m_hudTextDrawCount;
+    HudImageDraw m_hudImageDraws[MAX_HUD_IMAGE_DRAWS];
+    int m_hudImageDrawCount;
+    HudAvatar m_hudAvatars[MAX_HUD_AVATARS];
     vgui2::HFont m_hudFont;
     vgui2::HFont m_font;
     vgui2::HFont m_titleFont;
@@ -1895,6 +2098,16 @@ private:
     char m_infoText[2048];
     char m_mapDescription[4096];
     unsigned char m_previewPixels[256 * 256 * 4];
+    int m_hudRectDrawCount;
+    HudRectDraw m_hudRectDraws[MAX_HUD_RECT_DRAWS];
+    HudOverviewDraw m_hudOverviewDraw;
+    int m_overviewTexture;
+    int m_overviewWide, m_overviewTall;
+    bool m_overviewDirty;
+    bool m_overviewRotateClockwise;
+    char m_overviewPath[256];
+    unsigned char m_overviewPixels[MAX_HUD_OVERVIEW_SIDE *
+        MAX_HUD_OVERVIEW_SIDE * 4];
     MenuEntry m_entries[MAX_MENU_ENTRIES];
 };
 
@@ -1957,6 +2170,29 @@ public:
     {
         if (IsReady()) m_viewport.BeginHudTextFrame();
     }
+    void SetHudAvatar(int playerIndex, unsigned long long steamId,
+        const unsigned char* rgba, int wide, int tall)
+    {
+        if (IsReady())
+            m_viewport.SetHudAvatar(playerIndex, steamId, rgba, wide, tall);
+    }
+    void DrawHudAvatar(int playerIndex, int x, int y, int size, int alpha)
+    {
+        if (IsReady())
+            m_viewport.DrawHudAvatar(playerIndex, x, y, size, alpha);
+    }
+    bool DrawHudOverview(const char* filename, bool rotateClockwise,
+        int x, int y, int wide, int tall, int alpha)
+    {
+        return IsReady() && m_viewport.DrawHudOverview(filename,
+            rotateClockwise, x, y, wide, tall, alpha);
+    }
+    void DrawHudRect(int x, int y, int wide, int tall,
+        int r, int g, int b, int a)
+    {
+        if (IsReady())
+            m_viewport.DrawHudRect(x, y, wide, tall, r, g, b, a);
+    }
     int DrawHudString(int x, int y, const char* text,
         int r, int g, int b, int a)
     {
@@ -2013,6 +2249,32 @@ extern "C" void CS16VGUI2_SetLegacyCursorVisible(int visible)
 extern "C" void CS16VGUI2_BeginHudTextFrame(void)
 {
     g_clientVGUI.BeginHudTextFrame();
+}
+
+extern "C" void CS16VGUI2_SetHudAvatar(int playerIndex,
+    unsigned long long steamId, const unsigned char* rgba, int wide, int tall)
+{
+    g_clientVGUI.SetHudAvatar(playerIndex, steamId, rgba, wide, tall);
+}
+
+extern "C" void CS16VGUI2_DrawHudAvatar(int playerIndex,
+    int x, int y, int size, int alpha)
+{
+    g_clientVGUI.DrawHudAvatar(playerIndex, x, y, size, alpha);
+}
+
+extern "C" int CS16VGUI2_DrawHudOverview(const char* filename,
+    int rotateClockwise, int x, int y, int wide, int tall, int alpha)
+{
+    return g_clientVGUI.DrawHudOverview(filename, rotateClockwise != 0,
+        x, y, wide, tall, alpha)
+        ? 1 : 0;
+}
+
+extern "C" void CS16VGUI2_DrawHudRect(int x, int y, int wide, int tall,
+    int r, int g, int b, int a)
+{
+    g_clientVGUI.DrawHudRect(x, y, wide, tall, r, g, b, a);
 }
 
 extern "C" int CS16VGUI2_DrawHudString(int x, int y, const char* text,

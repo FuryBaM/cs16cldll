@@ -32,6 +32,9 @@ version.
 #include "parsemsg.h"
 #include "draw_util.h"
 #include "triangleapi.h"
+#include "hud_spectator.h"
+#include "platform/steam_integration.h"
+#include "ui/vgui2/cs_vgui2.h"
 #ifndef M_PI
 #define M_PI		3.14159265358979323846	// matches value in gcc v2 math.h
 #endif
@@ -100,6 +103,11 @@ int CHudRadar::Init()
 	m_iFlags = HUD_DRAW;
 
 	cl_radartype = CVAR_CREATE( "cl_radartype", "0", FCVAR_ARCHIVE );
+	cl_radar_style = CVAR_CREATE( "cl_radar_style", "1", FCVAR_ARCHIVE );
+	cl_radar_alpha = CVAR_CREATE( "cl_radar_alpha", "180", FCVAR_ARCHIVE );
+	cl_radar_show_location = CVAR_CREATE( "cl_radar_show_location", "1", FCVAR_ARCHIVE );
+	cl_radar_overview = CVAR_CREATE( "cl_radar_overview", "1", FCVAR_ARCHIVE );
+	cl_team_roster = CVAR_CREATE( "cl_team_roster", "1", FCVAR_ARCHIVE );
 
 	gHUD.AddHudElem( this );
 	return 1;
@@ -248,6 +256,12 @@ int CHudRadar::Draw(float flTime)
 
 	int iTeamNumber = g_PlayerExtraInfo[ gHUD.m_Scoreboard.m_iPlayerNum ].teamnumber;
 	int r, g, b;
+	gHUD.m_Scoreboard.GetAllPlayersInfo();
+	DrawTopRoster();
+
+	if( cl_radar_overview->value > 0.0f &&
+		DrawOverviewRadar( flTime, iTeamNumber ) )
+		return 0;
 
 	if( cl_radartype->value )
 	{
@@ -259,6 +273,9 @@ int CHudRadar::Draw(float flTime)
 		SPR_Set( m_hRadar.spr, 25, 75, 25 );
 		SPR_DrawAdditive( 0, 0, 0, &m_hRadarOpaque.rect );
 	}
+
+	if( cl_radar_style->value > 0.0f )
+		DrawGuide();
 
 	for(int i = 0; i < 33; i++)
 	{
@@ -275,21 +292,32 @@ int CHudRadar::Draw(float flTime)
 		if( !FlashTime( flTime, &g_PlayerExtraInfo[i]) )
 			continue;
 
-		// player with C4 or VIP must be red
+		// Important roles remain immediately recognizable. Ordinary teammates
+		// use team colors and active voice speakers turn green.
 		if( g_PlayerExtraInfo[i].has_c4 || g_PlayerExtraInfo[i].vip )
 		{
-			DrawUtils::UnpackRGB( r, g, b, RGB_REDISH );
+			r = 255; g = 75; b = 45;
+		}
+		else if( g_PlayerExtraInfo[i].talking )
+		{
+			r = 70; g = 255; b = 100;
+		}
+		else if( iTeamNumber == TEAM_CT )
+		{
+			r = 90; g = 175; b = 255;
 		}
 		else
 		{
-			// white
-			DrawUtils::UnpackRGB( r, g, b, RGB_WHITE );
+			r = 255; g = 180; b = 70;
 		}
 
 		// calc radar position
 		Vector pos = WorldToRadar(gHUD.m_vecOrigin, g_PlayerExtraInfo[i].origin, gHUD.m_vecAngles);
 
-		DrawZAxis( pos, r, g, b, 255 );
+		if( cl_radar_style->value > 0.0f )
+			DrawZAxis( Vector(pos.x + 1, pos.y + 1, pos.z), 0, 0, 0, 180 );
+		DrawZAxis( pos, r, g, b,
+			min( 255, max( 40, (int)cl_radar_alpha->value ) ) );
 	}
 
 	// Terrorist specific code( C4 Bomb )
@@ -333,10 +361,206 @@ int CHudRadar::Draw(float flTime)
 		}
 	}
 
-	if( gHUD.GetGameType() == GAME_CZERO )
+	if( cl_radar_show_location->value > 0.0f )
 		DrawPlayerLocation( ( m_hRadarOpaque.rect.Height() ) + 10 );
 
 	return 0;
+}
+
+bool CHudRadar::OverviewToPanel(const Vector& world, int x, int y,
+	int wide, int tall, int& screenX, int& screenY) const
+{
+	const overviewInfo_t& overview = gHUD.m_Spectator.m_OverviewData;
+	if( overview.layers <= 0 || overview.zoom <= 0.0f )
+		return false;
+
+	const float aspect = 4.0f / 3.0f;
+	float u, v;
+	if( overview.rotated )
+	{
+		const float worldWide = 8192.0f / overview.zoom;
+		const float worldTall = 8192.0f / (overview.zoom * aspect);
+		u = (world.x - (overview.origin[0] - worldWide * 0.5f)) / worldWide;
+		v = ((overview.origin[1] + worldTall * 0.5f) - world.y) / worldTall;
+	}
+	else
+	{
+		const float worldWide = 8192.0f / (overview.zoom * aspect);
+		const float worldTall = 8192.0f / overview.zoom;
+		u = (world.x - (overview.origin[0] - worldWide * 0.5f)) / worldWide;
+		v = ((overview.origin[1] + worldTall * 0.5f) - world.y) / worldTall;
+	}
+
+	if( u < 0.0f || u > 1.0f || v < 0.0f || v > 1.0f )
+		return false;
+	const int mapX = overview.rotated ? x : x + wide / 8;
+	const int mapY = overview.rotated ? y + tall / 8 : y;
+	const int mapWide = overview.rotated ? wide : wide * 3 / 4;
+	const int mapTall = overview.rotated ? tall * 3 / 4 : tall;
+	screenX = mapX + (int)(u * (mapWide - 1));
+	screenY = mapY + (int)(v * (mapTall - 1));
+	return true;
+}
+
+bool CHudRadar::DrawOverviewRadar(float flTime, int teamNumber)
+{
+	const overviewInfo_t& overview = gHUD.m_Spectator.m_OverviewData;
+	if( overview.layers <= 0 || !overview.layersImages[0][0] )
+		return false;
+
+	const int wide = min(240, max(180, ScreenWidth / 8));
+	const int tall = wide;
+	const int left = 8;
+	const int top = max(22, gHUD.GetCharHeight() + 8);
+	if( !CS16VGUI2_DrawHudOverview(overview.layersImages[0],
+		!overview.rotated, left, top,
+		wide, tall, min(255, max(80, (int)cl_radar_alpha->value + 55))) )
+		return false;
+
+	// Darken the stock overview just enough to keep markers readable.
+	CS16VGUI2_DrawHudRect(left, top, wide, tall, 0, 0, 0, 82);
+	CS16VGUI2_DrawHudRect(left, top, wide, 2, 235, 155, 35, 220);
+	CS16VGUI2_DrawHudRect(left, top + tall - 2, wide, 2, 235, 155, 35, 220);
+	CS16VGUI2_DrawHudRect(left, top, 2, tall, 235, 155, 35, 220);
+	CS16VGUI2_DrawHudRect(left + wide - 2, top, 2, tall, 235, 155, 35, 220);
+
+	for( int i = 1; i <= MAX_PLAYERS; ++i )
+	{
+		if( i != gHUD.m_Scoreboard.m_iPlayerNum &&
+			(g_PlayerExtraInfo[i].dead ||
+			 g_PlayerExtraInfo[i].teamnumber != teamNumber ||
+			 !FlashTime(flTime, &g_PlayerExtraInfo[i])) )
+			continue;
+		if( i == gHUD.m_Scoreboard.m_iPlayerNum ||
+			g_PlayerExtraInfo[i].teamnumber == teamNumber )
+		{
+			int markerX, markerY;
+			const Vector origin = i == gHUD.m_Scoreboard.m_iPlayerNum
+				? gHUD.m_vecOrigin : g_PlayerExtraInfo[i].origin;
+			if( !OverviewToPanel(origin, left, top, wide, tall,
+				markerX, markerY) )
+				continue;
+			int mr = teamNumber == TEAM_CT ? 90 : 255;
+			int mg = teamNumber == TEAM_CT ? 175 : 180;
+			int mb = teamNumber == TEAM_CT ? 255 : 70;
+			int size = 5;
+			if( i == gHUD.m_Scoreboard.m_iPlayerNum )
+			{ mr = 255; mg = 225; mb = 80; size = 7; }
+			else if( g_PlayerExtraInfo[i].talking )
+			{ mr = 65; mg = 255; mb = 90; size = 7; }
+			else if( g_PlayerExtraInfo[i].has_c4 || g_PlayerExtraInfo[i].vip )
+			{ mr = 255; mg = 70; mb = 45; size = 7; }
+			CS16VGUI2_DrawHudRect(markerX - size / 2 - 1,
+				markerY - size / 2 - 1, size + 2, size + 2, 0, 0, 0, 210);
+			CS16VGUI2_DrawHudRect(markerX - size / 2,
+				markerY - size / 2, size, size, mr, mg, mb, 255);
+		}
+	}
+
+	if( teamNumber == TEAM_TERRORIST && !g_PlayerExtraInfo[33].dead &&
+		g_PlayerExtraInfo[33].radarflashes &&
+		FlashTime(flTime, &g_PlayerExtraInfo[33]) )
+	{
+		int markerX, markerY;
+		if( OverviewToPanel(g_PlayerExtraInfo[33].origin, left, top, wide, tall,
+			markerX, markerY) )
+		{
+			CS16VGUI2_DrawHudRect(markerX - 5, markerY - 1, 11, 3,
+				255, 55, 35, 255);
+			CS16VGUI2_DrawHudRect(markerX - 1, markerY - 5, 3, 11,
+				255, 55, 35, 255);
+		}
+	}
+
+	if( cl_radar_show_location->value > 0.0f )
+		DrawPlayerLocation(top + tall + 5);
+	return true;
+}
+
+void CHudRadar::DrawTopRoster()
+{
+	if( !cl_team_roster || cl_team_roster->value <= 0.0f || g_iUser1 )
+		return;
+
+	int teams[2][MAX_PLAYERS];
+	int counts[2] = { 0, 0 };
+	int alive[2] = { 0, 0 };
+	for( int i = 1; i <= MAX_PLAYERS; ++i )
+	{
+		if( !g_PlayerInfoList[i].name || !g_PlayerInfoList[i].name[0] )
+			continue;
+		const int slot = g_PlayerExtraInfo[i].teamnumber == TEAM_TERRORIST ? 0 :
+			(g_PlayerExtraInfo[i].teamnumber == TEAM_CT ? 1 : -1);
+		if( slot < 0 ) continue;
+		teams[slot][counts[slot]++] = i;
+		if( !g_PlayerExtraInfo[i].dead ) ++alive[slot];
+	}
+	if( !counts[0] && !counts[1] ) return;
+
+	const int size = ScreenHeight >= 900 ? 28 : 22;
+	const int step = size + 5;
+	const int centerWide = 96;
+	const int y = 7;
+	for( int side = 0; side < 2; ++side )
+	{
+		const int edge = ScreenWidth / 2 + (side ? centerWide / 2 + 8 :
+			-centerWide / 2 - 8);
+		for( int ordinal = 0; ordinal < counts[side]; ++ordinal )
+		{
+			const int player = teams[side][ordinal];
+			const int x = side ? edge + ordinal * step :
+				edge - size - ordinal * step;
+			const bool dead = g_PlayerExtraInfo[player].dead != 0;
+			const int r = side ? 85 : 245;
+			const int g = side ? 165 : 165;
+			const int b = side ? 245 : 55;
+			CS16VGUI2_DrawHudRect(x - 2, y - 2, size + 4, size + 4,
+				r, g, b, dead ? 55 : 205);
+			CS16VGUI2_DrawHudRect(x, y, size, size, 8, 8, 8, 210);
+			CS16Steam_QueueAvatar(player, g_PlayerInfoList[player].m_nSteamID,
+				x, y, size, dead ? 65 : 255, gHUD.m_flTime);
+			if( g_PlayerExtraInfo[player].talking )
+				CS16VGUI2_DrawHudRect(x + size - 6, y + size - 6, 6, 6,
+					55, 255, 85, 255);
+		}
+	}
+
+	char score[32];
+	snprintf(score, sizeof(score), "%d  :  %d", alive[0], alive[1]);
+	int textWide = 0, textTall = 0;
+	CS16VGUI2_GetHudStringSize(score, &textWide, &textTall);
+	CS16VGUI2_DrawHudRect(ScreenWidth / 2 - centerWide / 2, y - 2,
+		centerWide, size + 4, 0, 0, 0, 170);
+	CS16VGUI2_DrawHudString(ScreenWidth / 2 - textWide / 2,
+		y + (size - textTall) / 2, score, 245, 185, 75, 255);
+}
+
+void CHudRadar::DrawGuide()
+{
+	const int center = (int)iMaxRadius;
+	const int alpha = min( 150, max( 25, (int)cl_radar_alpha->value / 2 ) );
+	const int outerRadius = max( 4, center - 3 );
+	const int innerRadius = max( 3, center / 2 );
+
+	FillRGBABlend( 3, center, outerRadius * 2 - 1, 1, 90, 150, 90, alpha / 2 );
+	FillRGBABlend( center, 3, 1, outerRadius * 2 - 1, 90, 150, 90, alpha / 2 );
+	for( int degrees = 0; degrees < 360; degrees += 6 )
+	{
+		const float angle = DEG2RAD( (float)degrees );
+		const int ox = center + (int)(cos(angle) * outerRadius);
+		const int oy = center + (int)(sin(angle) * outerRadius);
+		FillRGBABlend( ox, oy, 1, 1, 120, 210, 120, alpha );
+		if( degrees % 12 == 0 )
+		{
+			const int ix = center + (int)(cos(angle) * innerRadius);
+			const int iy = center + (int)(sin(angle) * innerRadius);
+			FillRGBABlend( ix, iy, 1, 1, 80, 135, 80, alpha / 2 );
+		}
+	}
+
+	FillRGBABlend( center - 1, center - 2, 3, 4, 255, 255, 255, 220 );
+	FillRGBABlend( center - 2, center, 5, 2, 255, 160, 0, 230 );
+
 }
 
 void CHudRadar::DrawPlayerLocation( int y )
