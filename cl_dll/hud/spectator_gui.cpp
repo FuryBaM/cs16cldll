@@ -5,7 +5,6 @@
 #include "parsemsg.h"
 #include "draw_util.h"
 #include "ammo.h"
-#include "ammohistory.h"
 #include "pm_shared.h"
 #include "platform/steam_integration.h"
 
@@ -159,19 +158,10 @@ void DrawObservedPlayerCard(int target, int textTall)
     const int statsX = panelX + panelWide - 175;
     FillRGBABlend(statsX - 12, panelY + 9, 1, panelTall - 18,
         255, 255, 255, 45);
-    char stats[96];
-    snprintf(stats, sizeof(stats), "HP %d    ARMOR %d",
-        health, g_iUser1 == OBS_IN_EYE ? gHUD.m_Battery.GetArmor() : 0);
+    char stats[32];
+    snprintf(stats, sizeof(stats), "HP %d", health);
     DrawUtils::DrawHudString(statsX, panelY + 11,
         panelX + panelWide - 8, stats, 235, 235, 235);
-    if (weapon && weapon->iClip >= 0)
-    {
-        const int reserve = weapon->iAmmoType >= 0 ?
-            gWR.CountAmmo(weapon->iAmmoType) : 0;
-        snprintf(stats, sizeof(stats), "AMMO %d / %d", weapon->iClip, reserve);
-        DrawUtils::DrawHudString(statsX, panelY + 13 + textTall,
-            panelX + panelWide - 8, stats, 255, 175, 55);
-    }
 }
 }
 

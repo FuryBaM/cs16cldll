@@ -27,6 +27,10 @@ void CS16VGUI2_BeginHudTextFrame(void);
 void CS16VGUI2_SetHudAvatar(int playerIndex, unsigned long long steamId,
     const unsigned char* rgba, int wide, int tall);
 void CS16VGUI2_DrawHudAvatar(int playerIndex, int x, int y, int size, int alpha);
+int CS16VGUI2_DrawHudOverview(const char* filename, int rotateClockwise,
+    int x, int y, int wide, int tall, int alpha);
+void CS16VGUI2_DrawHudRect(int x, int y, int wide, int tall,
+    int r, int g, int b, int a);
 int CS16VGUI2_DrawHudString(int x, int y, const char* text,
     int r, int g, int b, int a);
 int CS16VGUI2_GetHudStringSize(const char* text, int* wide, int* tall);

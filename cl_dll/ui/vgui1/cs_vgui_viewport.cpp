@@ -1113,10 +1113,15 @@ private:
             const int commandDepth = CommandPanelDepth(m_panels[i]);
             if (commandDepth >= 0)
             {
-                int y = 152;
+                // The overview radar occupies the upper-left square. Anchor
+                // the command menu below it instead of covering the map.
+                int radarSize = m_width / 8;
+                if (radarSize < 180) radarSize = 180;
+                if (radarSize > 240) radarSize = 240;
+                int y = radarSize + 38;
                 for (int depth = 1; depth <= commandDepth; ++depth)
-                    y += m_commandAnchorRows[depth] * 27;
-                m_panels[i]->setPos(LayoutValue(commandDepth * 139), LayoutValue(y));
+                    y += LayoutValue(m_commandAnchorRows[depth] * 27);
+                m_panels[i]->setPos(LayoutValue(commandDepth * 139), y);
             }
             else
             {

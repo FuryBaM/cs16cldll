@@ -560,7 +560,6 @@ public:
 	int Draw(float flTime);
 	CHudMsgFunc(Battery);
 	CHudMsgFunc(ArmorType);
-	int GetArmor() const { return m_iBat; }
 	
 private:
 	enum armortype_t {

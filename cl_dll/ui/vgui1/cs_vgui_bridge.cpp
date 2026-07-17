@@ -706,6 +706,117 @@ extern "C" int CS16VGUI_LoadTGA(const char* filename, unsigned char* rgba,
     return 1;
 }
 
+extern "C" int CS16VGUI_LoadBMP(const char* filename, unsigned char* rgba,
+    int rgbaSize, int maxSide, int rotateClockwise, int* width, int* height)
+{
+    if (width) *width = 0;
+    if (height) *height = 0;
+    if (!filename || !filename[0] || !rgba || rgbaSize <= 0 ||
+        maxSide <= 0 || !gEngfuncs.COM_LoadFile || !gEngfuncs.COM_FreeFile)
+        return 0;
+
+    int length = 0;
+    byte* file = gEngfuncs.COM_LoadFile((char*)filename, 5, &length);
+    if (!file || length < 54 || file[0] != 'B' || file[1] != 'M')
+    {
+        if (file) gEngfuncs.COM_FreeFile(file);
+        return 0;
+    }
+
+    const int dataOffset = *(const int*)(file + 10);
+    const int sourceWide = *(const int*)(file + 18);
+    const int signedHeight = *(const int*)(file + 22);
+    const int sourceTall = signedHeight < 0 ? -signedHeight : signedHeight;
+    const int bitsPerPixel = *(const unsigned short*)(file + 28);
+    const int compression = *(const int*)(file + 30);
+    if (sourceWide <= 0 || sourceTall <= 0 || sourceWide > 4096 ||
+        sourceTall > 4096 || compression != 0 ||
+        (bitsPerPixel != 8 && bitsPerPixel != 24 && bitsPerPixel != 32) ||
+        dataOffset < 54 || dataOffset >= length)
+    {
+        gEngfuncs.COM_FreeFile(file);
+        return 0;
+    }
+
+    const float scale = min(1.0f, (float)maxSide /
+        (float)max(sourceWide, sourceTall));
+    const int sampledWide = max(1, (int)(sourceWide * scale + 0.5f));
+    const int sampledTall = max(1, (int)(sourceTall * scale + 0.5f));
+    const int contentWide = rotateClockwise ? sampledTall : sampledWide;
+    const int contentTall = rotateClockwise ? sampledWide : sampledTall;
+    const int targetWide = max(contentWide, contentTall);
+    const int targetTall = targetWide;
+    if (targetWide * targetTall > rgbaSize / 4)
+    {
+        gEngfuncs.COM_FreeFile(file);
+        return 0;
+    }
+
+    const int sourceStride = ((sourceWide * bitsPerPixel + 31) / 32) * 4;
+    if (dataOffset + sourceStride * sourceTall > length)
+    {
+        gEngfuncs.COM_FreeFile(file);
+        return 0;
+    }
+
+    memset(rgba, 0, targetWide * targetTall * 4);
+    const int contentX = (targetWide - contentWide) / 2;
+    const int contentY = (targetTall - contentTall) / 2;
+    const byte* palette = file + 54;
+    const int paletteBytes = dataOffset - 54;
+    for (int y = 0; y < sampledTall; ++y)
+    {
+        const int sampledY = min(sourceTall - 1, y * sourceTall / sampledTall);
+        const int sourceY = signedHeight > 0 ? sourceTall - 1 - sampledY : sampledY;
+        const byte* row = file + dataOffset + sourceY * sourceStride;
+        for (int x = 0; x < sampledWide; ++x)
+        {
+            const int sourceX = min(sourceWide - 1, x * sourceWide / sampledWide);
+            const int outputX = contentX +
+                (rotateClockwise ? sampledTall - 1 - y : x);
+            const int outputY = contentY + (rotateClockwise ? x : y);
+            unsigned char* destination = rgba +
+                (outputY * targetWide + outputX) * 4;
+            if (bitsPerPixel == 8)
+            {
+                const int index = row[sourceX];
+                if ((index + 1) * 4 > paletteBytes)
+                {
+                    destination[0] = destination[1] = destination[2] = 0;
+                }
+                else
+                {
+                    destination[0] = palette[index * 4 + 2];
+                    destination[1] = palette[index * 4 + 1];
+                    destination[2] = palette[index * 4 + 0];
+                }
+                destination[3] = 255;
+            }
+            else
+            {
+                const int bytes = bitsPerPixel / 8;
+                const byte* source = row + sourceX * bytes;
+                destination[0] = source[2];
+                destination[1] = source[1];
+                destination[2] = source[0];
+                destination[3] = bitsPerPixel == 32 ? source[3] : 255;
+            }
+
+            // GoldSrc overview BMPs use vivid green as a chroma key. The
+            // engine's map-sprite loader removes it automatically; VGUI does
+            // not, so preserve the same transparency here.
+            if (destination[1] >= 180 && destination[0] <= 90 &&
+                destination[2] <= 90)
+                destination[3] = 0;
+        }
+    }
+
+    gEngfuncs.COM_FreeFile(file);
+    if (width) *width = targetWide;
+    if (height) *height = targetTall;
+    return 1;
+}
+
 extern "C" int CS16VGUI_GetRoundTime(char* output, int outputSize)
 {
     if (!output || outputSize <= 0)

@@ -132,7 +132,14 @@ int CHud::Redraw(float flTime, int intermission)
 					CS16_StartupTrace(stage);
 				}
 
+				// Spectator weapon state belongs to the local client, so its
+				// clip/reserve values are always zero. Keep CHudAmmo running for
+				// the in-eye sniper scope, but suppress only its weapon readout.
+				const int savedHideHud = m_iHideHUDDisplay;
+				if (g_iUser1 && pList->p == &m_Ammo)
+					m_iHideHUDDisplay |= HIDEHUD_WEAPONS;
 				pList->p->Draw(flTime);
+				m_iHideHUDDisplay = savedHideHud;
 
 				if (traceThisRedraw)
 				{
