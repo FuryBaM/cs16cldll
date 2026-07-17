@@ -61,6 +61,30 @@
     <Filter Include="Исходные файлы\wpn_shared">
       <UniqueIdentifier>{730cc526-7232-4a0d-8270-f56e8b97a7e0}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Исходные файлы\ui">
+      <UniqueIdentifier>{97e6da0b-c175-4f09-b5c7-dd2e32942962}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Исходные файлы\ui\common">
+      <UniqueIdentifier>{c7cfdad2-05af-44fb-a2eb-5805355d7392}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Исходные файлы\ui\vgui1">
+      <UniqueIdentifier>{5f1242ce-aabb-43fa-9c2e-4e1627cbd550}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Исходные файлы\ui\vgui2">
+      <UniqueIdentifier>{5a666464-c76c-41a7-8ab6-bccf63e673eb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Файлы заголовков\ui">
+      <UniqueIdentifier>{fbfa7100-4e77-46cf-bec4-7688f404f316}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Файлы заголовков\ui\common">
+      <UniqueIdentifier>{f22d9708-132d-40e6-a404-79ae852683be}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Файлы заголовков\ui\vgui1">
+      <UniqueIdentifier>{377c7280-a06b-4879-9cb8-a44bb36bf694}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Файлы заголовков\ui\vgui2">
+      <UniqueIdentifier>{4b09e666-a48d-4bb6-825e-ab0a0ce004ef}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="view.cpp">
@@ -81,20 +105,20 @@
     <ClCompile Include="cdll_int.cpp">
       <Filter>Исходные файлы\cl_dll</Filter>
     </ClCompile>
-    <ClCompile Include="cs_localize.cpp">
-      <Filter>Исходные файлы\cl_dll</Filter>
+    <ClCompile Include="ui\common\cs_localize.cpp">
+      <Filter>Исходные файлы\ui\common</Filter>
     </ClCompile>
-    <ClCompile Include="cs_vgui_bridge.cpp">
-      <Filter>Исходные файлы\cl_dll</Filter>
+    <ClCompile Include="ui\vgui1\cs_vgui_bridge.cpp">
+      <Filter>Исходные файлы\ui\vgui1</Filter>
     </ClCompile>
-    <ClCompile Include="cs_vgui2.cpp">
-      <Filter>Исходные файлы\cl_dll</Filter>
+    <ClCompile Include="ui\vgui2\cs_vgui2.cpp">
+      <Filter>Исходные файлы\ui\vgui2</Filter>
     </ClCompile>
-    <ClCompile Include="cs_vgui2_client.cpp">
-      <Filter>Исходные файлы\cl_dll</Filter>
+    <ClCompile Include="ui\vgui2\cs_vgui2_client.cpp">
+      <Filter>Исходные файлы\ui\vgui2</Filter>
     </ClCompile>
-    <ClCompile Include="cs_vgui_viewport.cpp">
-      <Filter>Исходные файлы\cl_dll</Filter>
+    <ClCompile Include="ui\vgui1\cs_vgui_viewport.cpp">
+      <Filter>Исходные файлы\ui\vgui1</Filter>
     </ClCompile>
     <ClCompile Include="com_weapons.cpp">
       <Filter>Исходные файлы\cl_dll</Filter>
@@ -429,8 +453,8 @@
     <ClCompile Include="rain.cpp">
       <Filter>Исходные файлы\cl_dll</Filter>
     </ClCompile>
-    <ClCompile Include="draw_util.cpp">
-      <Filter>Исходные файлы\cl_dll</Filter>
+    <ClCompile Include="ui\common\draw_util.cpp">
+      <Filter>Исходные файлы\ui\common</Filter>
     </ClCompile>
     <ClCompile Include="voice_status.cpp">
       <Filter>Исходные файлы\cl_dll</Filter>
@@ -449,17 +473,17 @@
     <ClInclude Include="cl_dll.h">
       <Filter>Файлы заголовков\cl_dll</Filter>
     </ClInclude>
-    <ClInclude Include="cs_vgui.h">
-      <Filter>Файлы заголовков\cl_dll</Filter>
+    <ClInclude Include="ui\vgui1\cs_vgui.h">
+      <Filter>Файлы заголовков\ui\vgui1</Filter>
     </ClInclude>
-    <ClInclude Include="cs_vgui2.h">
-      <Filter>Файлы заголовков\cl_dll</Filter>
+    <ClInclude Include="ui\vgui2\cs_vgui2.h">
+      <Filter>Файлы заголовков\ui\vgui2</Filter>
     </ClInclude>
-    <ClInclude Include="cs_vgui2_client.h">
-      <Filter>Файлы заголовков\cl_dll</Filter>
+    <ClInclude Include="ui\vgui2\cs_vgui2_client.h">
+      <Filter>Файлы заголовков\ui\vgui2</Filter>
     </ClInclude>
-    <ClInclude Include="cs_localize.h">
-      <Filter>Файлы заголовков\cl_dll</Filter>
+    <ClInclude Include="ui\common\cs_localize.h">
+      <Filter>Файлы заголовков\ui\common</Filter>
     </ClInclude>
     <ClInclude Include="com_weapons.h">
       <Filter>Файлы заголовков\cl_dll</Filter>
@@ -524,8 +548,8 @@
     <ClInclude Include="..\game_shared\vgui_slider2.h">
       <Filter>Файлы заголовков\game_shared</Filter>
     </ClInclude>
-    <ClInclude Include="draw_util.h">
-      <Filter>Файлы заголовков\cl_dll</Filter>
+    <ClInclude Include="ui\common\draw_util.h">
+      <Filter>Файлы заголовков\ui\common</Filter>
     </ClInclude>
     <ClInclude Include="rain.h">
       <Filter>Файлы заголовков\cl_dll</Filter>
