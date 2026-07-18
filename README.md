@@ -17,6 +17,14 @@ engine, renderer, or UI APIs.
 · [Browse the source](https://github.com/FuryBaM/cs16-goldsrc-client)
 · [Report an issue](https://github.com/FuryBaM/cs16-goldsrc-client/issues)
 
+## Steam Guides
+
+If you prefer a step-by-step setup guide with screenshots, or want to rate and
+share the project within the Steam Community, check out the official guides:
+
+- 🇬🇧 [English Setup Guide on Steam](https://steamcommunity.com/sharedfiles/filedetails/?id=3767117515)
+- 🇷🇺 [Russian Setup Guide on Steam](https://steamcommunity.com/sharedfiles/filedetails/?id=3767105222)
+
 ## Important safety notice
 
 This project replaces a game binary. Back up the original `client.dll` before
