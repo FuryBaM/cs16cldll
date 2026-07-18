@@ -1,263 +1,346 @@
-# CS 1.6 client.dll for Steam GoldSrc
+# CS 1.6 Steam GoldSrc Client
 
-Экспериментальная полная замена `cstrike/cl_dlls/client.dll`, адаптированная
-для обычного 32-битного Steam GoldSrc. Каркас DLL и lifecycle взяты из
-стандартного Half-Life `cl_dll`, а CS 1.6 HUD, события и shared-weapon код — из
-Velaron/cs16-client. Это не сборка для Xash3D: активные Xash/mobile/render API
-не используются.
+An experimental, open-source replacement for Counter-Strike 1.6's
+`cstrike/cl_dlls/client.dll`, built specifically for the original 32-bit Steam
+GoldSrc engine.
 
-## Почему этот проект уникален
+The DLL keeps the native GoldSrc client ABI while restoring Counter-Strike
+client features such as the original VGUI, weapon prediction, the HUD,
+scoreboard, radar, spectator interface, voice indicators, and weapon events.
+It is **not** a Xash3D or mobile client build and does not depend on Xash-specific
+engine, renderer, or UI APIs.
 
-> **Это единственный клиент, который компилируется под оригинальный Steam GoldSrc
-> и работает на серверах без вылетов.**
+> **This is the only client that compiles for the original Steam GoldSrc engine
+> and works on multiplayer servers without crashes.**
 
-Проект не просто собирает старый HLSDK-код современным компилятором. Он сохраняет
-контракт оригинального 32-битного Steam GoldSrc и одновременно возвращает
-Counter-Strike-специфичную клиентскую логику:
+[Download the latest release](https://github.com/FuryBaM/cs16-goldsrc-client/releases/latest)
+· [Browse the source](https://github.com/FuryBaM/cs16-goldsrc-client)
+· [Report an issue](https://github.com/FuryBaM/cs16-goldsrc-client/issues)
 
-- **Нативный Steam GoldSrc ABI.** Результат — PE32/x86 `client.dll` с полной
-  таблицей из 44 экспортов, ожидаемых движком, без зависимости от `xash.dll`,
-  `mainui.dll` или мобильных API.
-- **Оригинальный VGUI.** Клиент использует поставляемые Steam библиотеки
-  `vgui.dll` и `vgui2.dll`, оригинальные ресурсы CS 1.6 и совместимый VGUI1
-  fallback. Интерфейс не заменён Xash-реализацией.
-- **Рабочий prediction.** Shared-weapon код выполняется через штатный
-  `HUD_PostRunCmd`; клиентский адаптер отделяет prediction от серверных
-  `PRECACHE_*`/`SET_MODEL` callback и не вызывает отсутствующие функции движка.
-- **Стабильный мультиплеер.** Исправлены lifecycle, таблицы callback, границы
-  индексов игроков, prediction, scoreboard, spectator HUD и voice HUD. Клиент
-  проходит реальные игровые smoke-тесты: подключение, spawn, покупка, стрельба,
-  смена оружия, смерть, наблюдение и голосовая связь.
+## Important safety notice
 
-Многие старые проекты ориентированы на Xash3D, mobile/render API либо содержат
-только базовый Half-Life `cl_dll`. Здесь целевой движок — именно оригинальный
-Steam GoldSrc, сохранён оригинальный CS VGUI, восстановлен weapon prediction и
-проверена полноценная сетевая сессия, а не только запуск локальной карты.
+This project replaces a game binary. Back up the original `client.dll` before
+installing anything.
 
-## Что изменено
+Use `-insecure` while developing or testing this client. Do not join
+VAC-secured servers with a modified client module. Test it locally first.
 
-- цель сборки ограничена Windows x86, как требует Steam GoldSrc;
-- восстановлен стандартный GoldSrc ABI и полная таблица из 44 экспортов;
-- используется обычный GoldSrc input (`input.cpp` + `inputw32.cpp`/SDL2);
-- добавлен настоящий VGUI2 viewport через штатные GoldSrc-интерфейсы
-  `IVGui`, `IPanel`, `ISurface` и `IInput`; стандартные CS menu ID `2`,
-  `26`–`34` обрабатывают выбор команды, моделей T/CT и полное дерево покупки
-  без Xash API;
-- клиент публикует ожидаемый движком интерфейс `VClientVGUI001`; если VGUI2
-  отсутствует или не инициализировался, меню автоматически обслуживает
-  существующий VGUI1 viewport;
-- `_vgui_menus` включается только после успешного создания viewport; пока не
-  реализованный VGUI menu ID безопасно переключает текущую сессию обратно на
-  штатный текстовый `ShowMenu`;
-- сохранены CS HUD, scoreboard, radar, spectator HUD, client-side weapon
-  prediction, события оружия, voice mask/mute и иконка говорящего;
-- scoreboard и голосовой HUD показывают Steam-аватары игроков, полученные через
-  уже загруженный игрой `steam_api.dll`; аватары кэшируются и не добавляют DLL
-  новых обязательных зависимостей;
-- kill feed вмещает до шести событий, подсвечивает убийства с участием локального
-  игрока, различает team kill и плавно затухает поверх компактной тёмной панели;
-- радар получил кольца дальности, центральный маркер, цвета
-  команд, зелёную индикацию говорящих игроков и подпись текущей локации;
-- добавлены Steam Rich Presence и опциональный Discord RPC через локальный IPC,
-  совместимый с 32-битным GoldSrc без сторонней Discord DLL;
-- защищена опциональная загрузка `particleman.dll`, исправлены границы индексов
-  игроков, shutdown и заполнение GoldSrc function table.
-- восстановлен клиентский адаптер shared-weapon кода: серверные
-  `PRECACHE_MODEL`, `PRECACHE_SOUND` и `SET_MODEL` становятся no-op внутри
-  `client.dll`, поэтому первый `HUD_PostRunCmd` больше не вызывает нулевой
-  server callback при создании prediction-объектов оружия.
-- `cl_charset` и `con_charset`, которые Xash создаёт сам, теперь имеют
-  GoldSrc-совместимый fallback и null-check; первый `CHud::Redraw` больше не
-  разыменовывает отсутствующий Xash cvar.
-- подключены штатные сообщения CS `AllowSpec` и `BuyClose`, поэтому GoldSrc не
-  сообщает об отсутствующем обработчике и корректно закрывает активное меню.
-- снова включён Counter-Strike studio renderer с 9-way blend, pitch/yaw blend
-  и CS gait-анимацией: временный Half-Life renderer давал игрокам неправильные
-  позы. Опасные указатели, sequence/gaitsequence и число model attachments
-  ограничены штатными пределами GoldSrc;
-- `cl_recoil_crosshair_scale` теперь создаётся самим клиентом: обычный GoldSrc
-  не предоставляет эту переменную, а первый кадр прицела после спавна раньше
-  разыменовывал нулевой указатель.
-- `+showscores` теперь одновременно выставляет GoldSrc `IN_SCORE` и открывает
-  встроенный CS scoreboard; прежний input-handler поглощал команду, не включая
-  отрисовку таблицы.
-- центральные `TextMsg` (`Terrorists Win`, `Bomb has been planted` и другие)
-  имеют собственный устойчивый HUD-слой. Клиент читает штатные UTF-8/UTF-16LE
-  `resource/valve_*.txt` и `resource/cstrike_*.txt`, а форматирование серверных
-  строк не передаётся небезопасно в `printf`.
-- зарегистрированы обе штатные команды `+commandmenu`/`-commandmenu`. Клавиша
-  `H` открывает нативное VGUI1-меню из игрового `commandmenu.txt`; поддержаны
-  вложенные секции, фильтры `TEAMn`/`MAP`, `TOGGLE`, мышь и горячие клавиши.
-  UTF-8 BOM пропускается, а UTF-8-подписи переводятся в однобайтовую кодировку,
-  ожидаемую старым `vgui.dll`; это предотвращает вылет на кириллических меню.
-  При отсутствии файла используется небольшое встроенное запасное меню.
+## Highlights
 
-Для MinGW-сборки внешние C++-интерфейсы `particleman.dll` и
-`GameClientExports001` намеренно отключены: Steam-модули собраны с MSVC, и их
-vtable ABI несовместим с MinGW. VGUI1 является отдельным исключением: его
-маленький viewport собирается Microsoft-ABI-совместимым объектом и общается с
-остальным клиентом только через C-функции. Основной GoldSrc API также остаётся
-чистым C ABI.
+- Native PE32/x86 Steam GoldSrc ABI with all 44 expected client exports.
+- No dependency on `xash.dll`, `mainui.dll`, or mobile/render APIs.
+- Original Steam `vgui.dll` and `vgui2.dll` integration with a VGUI1 fallback.
+- VGUI2 team, model, and buy menus using the original CS 1.6 resources.
+- Client-side weapon prediction and reconciliation through `HUD_PostRunCmd`.
+- Restored Counter-Strike studio renderer, gait animation, and weapon events.
+- Original CS HUD sprites and fonts.
+- Steam avatars in the scoreboard and spectator HUD.
+- Improved kill feed, voice speaker display, overview radar, and spectator UI.
+- Correct widescreen sniper scope rendering.
+- Steam Rich Presence and optional Discord RPC without an extra Discord DLL.
+- Static MSVC runtime in Release builds.
 
-Сейчас VGUI2 покрывает выбор команды, модели и покупку. VGUI1 остаётся для
-`commandmenu.txt` и как запасной viewport. Радио и остальные ещё не перенесённые
-menu ID автоматически остаются в классическом текстовом виде.
-Голосовой HUD показывает имя говорящего игрока и использует штатный voice status.
-Используется штатный `vgui.dll`, уже поставляемый Steam GoldSrc; копировать
-версию этой библиотеки из Xash3D в папку игры нельзя.
+## Install a release
 
-Spectator HUD показывает адаптивную верхнюю ленту команд со Steam-аватарами,
-статусом жив/мёртв, индикатором голоса и выделением наблюдаемого игрока. Снизу
-рисуется карточка текущей цели с аватаром, ником, HP и доступными данными оружия.
-Классический вид можно вернуть командой `cl_spectator_hud_modern 0`.
+### 1. Download the client
 
-## Steam и Discord Presence
+Download the newest Win32 release from the
+[Releases page](https://github.com/FuryBaM/cs16-goldsrc-client/releases/latest)
+and extract it to a temporary folder.
 
-Steam Rich Presence включён по умолчанию и показывает текущую карту. Управление:
+### 2. Locate Counter-Strike 1.6
 
-```cfg
-cl_steam_rich_presence 1 // 0 — отключить
+In Steam:
+
+1. Open **Library**.
+2. Right-click **Counter-Strike** and select **Properties**.
+3. Open **Installed Files**.
+4. Select **Browse**.
+
+The game directory is normally named `Half-Life`. The file being replaced is:
+
+```text
+Half-Life\cstrike\cl_dlls\client.dll
 ```
 
-Discord RPC не требует дополнительной DLL, но нуждается в Application ID вашего
-проекта в [Discord Developer Portal](https://discord.com/developers/applications):
+### 3. Back up the original client
 
-1. Создайте приложение и скопируйте его **Application ID**.
-2. В консоли игры задайте ID и включите интеграцию:
+Close Counter-Strike completely, then copy the existing file to a safe name:
 
-```cfg
-cl_discord_appid "123456789012345678"
-cl_discord_rpc 1
+```text
+Half-Life\cstrike\cl_dlls\client.dll
+    ->
+Half-Life\cstrike\cl_dlls\client.dll.original
 ```
 
-Discord должен быть запущен на том же компьютере. Пока ID не задан,
-`cl_discord_rpc` ничего не подключает и не отправляет. Для отключения используйте
-`cl_discord_rpc 0`.
+Do not skip this step. The backup provides the fastest way to return to Valve's
+original client.
 
-Настройки обновлённого радара:
+### 4. Install the replacement
 
-```cfg
-cl_radar_style 1         // 0 — классические маркеры без новой сетки
-cl_radar_alpha 180       // яркость сетки и маркеров, 40–255
-cl_radar_show_location 1 // подпись зоны под радаром
+Copy the downloaded `client.dll` to:
+
+```text
+Half-Life\cstrike\cl_dlls\client.dll
 ```
 
-## Сборка
+Confirm replacement when Windows asks.
 
-### 1. Что установить
+Do not copy `vgui.dll`, `vgui2.dll`, or `SDL2.dll` from Xash3D. This client uses
+the versions shipped with the Steam installation.
 
-- Windows 10 или Windows 11;
-- **Visual Studio Community 2026** (18.x);
-- workload **Desktop development with C++**;
-- компоненты **MSVC v145 C++ x64/x86 build tools** и **Windows 10/11 SDK**;
-- Git for Windows.
+### 5. Test locally
 
-Отдельно скачивать HLSDK, SDL2 или VGUI SDK не нужно: используемые заголовки,
-`SDL2.lib` и импортная библиотека VGUI уже находятся в репозитории. Установленная
-через Steam Counter-Strike 1.6 нужна только для запуска и проверки DLL.
+Add these launch options in Steam:
 
-### 2. Получить исходники
+```text
+-insecure -dev -console
+```
+
+Start Counter-Strike and run this command in the console:
+
+```text
+map de_dust2
+```
+
+Check movement, mouse input, team selection, the buy menu, firing, weapon
+switching, HUD, radar, scoreboard, spectator mode, and voice chat before joining
+any multiplayer server.
+
+## Restore the original Steam client
+
+Close Counter-Strike before restoring the DLL.
+
+### Restore from your backup
+
+Delete or rename the replacement `client.dll`, then rename:
+
+```text
+client.dll.original -> client.dll
+```
+
+The final path must be:
+
+```text
+Half-Life\cstrike\cl_dlls\client.dll
+```
+
+Remove `-insecure -dev -console` from the Steam launch options if you no longer
+need them.
+
+### Restore without a backup
+
+If the backup is missing:
+
+1. Open **Steam → Library**.
+2. Right-click **Counter-Strike → Properties**.
+3. Open **Installed Files**.
+4. Select **Verify integrity of game files**.
+
+Steam will download the original client again. Verification may also restore
+other modified game files.
+
+## Clone the repository
+
+Install [Git for Windows](https://git-scm.com/download/win), open PowerShell, and
+run:
 
 ```powershell
 git clone https://github.com/FuryBaM/cs16-goldsrc-client.git
 cd cs16-goldsrc-client
 ```
 
-### 3. Собрать Release DLL
+The default `master` branch contains the stable public version. To work with the
+current development branch instead:
 
-Откройте **Developer PowerShell for VS 2026** и выполните:
+```powershell
+git switch cs16cldll
+git pull --ff-only
+```
+
+There are no Git submodules. The required HLSDK, SDL2, and VGUI headers and
+import libraries are already included in the repository.
+
+To update an existing clone later:
+
+```powershell
+git switch master
+git pull --ff-only
+```
+
+## Build from source
+
+### Requirements
+
+- Windows 10 or Windows 11.
+- **Visual Studio Community 2026** (18.x).
+- The **Desktop development with C++** workload.
+- **MSVC v145 C++ x64/x86 build tools**.
+- A Windows 10 or Windows 11 SDK.
+- Git for Windows.
+
+The project uses C++17 and must be built as Win32/x86. A 64-bit DLL cannot be
+loaded by the original Steam GoldSrc engine.
+
+You do not need to download a separate HLSDK, SDL2 SDK, or VGUI SDK. The headers,
+`SDL2.lib`, and the VGUI import library used by the project are tracked in this
+repository.
+
+### Build from Developer PowerShell
+
+Open **Developer PowerShell for VS 2026** in the repository directory and run:
 
 ```powershell
 msbuild .\cs16cldll.sln /m /p:Configuration=Release /p:Platform=x86
+```
+
+The compiled DLL will be written to:
+
+```text
+build\Release\client.dll
+```
+
+Verify the result before installing it:
+
+```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\verify-client.ps1 `
   -Path .\build\Release\client.dll
 ```
 
-Либо откройте `cs16cldll.sln` в Visual Studio, выберите **Release** и **x86**, затем
-выполните **Build → Build Solution**. Готовый файл появится в
-`build/Release/client.dll`.
+The verification script checks that the output:
 
-Скрипт проверки подтверждает, что файл имеет формат PE32/x86, содержит все 44
-GoldSrc-экспорта и не импортирует библиотеки Xash3D. Release использует
-статический MSVC runtime; `SDL2.dll` и `vgui.dll` берутся из установленного
-Steam GoldSrc.
+- is a PE32/x86 DLL;
+- exports all 44 functions expected by Steam GoldSrc;
+- does not export unexpected client entry points;
+- does not import Xash3D libraries;
+- imports the expected Steam GoldSrc `SDL2.dll` and `vgui.dll` libraries.
 
-### 4. Запустить собранную DLL
+It also prints the SHA-256 hash of the built DLL.
 
-1. Закройте Counter-Strike 1.6.
-2. Найдите папку игры: Steam → Counter-Strike → **Properties** →
-   **Installed Files** → **Browse**.
-3. Сделайте резервную копию `cstrike/cl_dlls/client.dll`.
-4. Скопируйте `build/Release/client.dll` в `cstrike/cl_dlls/client.dll` с заменой.
-5. Добавьте параметры запуска `-insecure -dev -console`.
-6. Запустите игру и сначала проверьте DLL локально командой `map de_dust2`.
+### Build in Visual Studio
 
-`-insecure` обязателен при разработке и тестировании изменённого клиентского
-модуля. Не подключайтесь с этой DLL к VAC-secured серверам.
+1. Open `cs16cldll.sln`.
+2. Select **Release** as the configuration.
+3. Select **x86** as the solution platform.
+4. Select **Build → Build Solution**.
+5. Run `scripts/verify-client.ps1` against `build/Release/client.dll`.
 
-### Частые ошибки сборки
+Do not select x64. The solution's `x86` platform maps to the project's Win32
+configuration.
 
-- **MSB8020 / не найден v145:** установите Visual Studio 2026 и компонент
-  **MSVC v145 C++ x64/x86 build tools**.
-- **Не найден Windows SDK:** добавьте Windows 10 или Windows 11 SDK через
-  Visual Studio Installer → **Individual components**.
-- **Собирается не та архитектура:** используйте только `Platform=x86`; Steam
-  GoldSrc не загрузит 64-битную клиентскую DLL.
-- **DLL не удаётся заменить:** полностью закройте игру перед копированием.
-- **При запуске отсутствует SDL2.dll или vgui.dll:** проверьте файлы игры через
-  Steam; не копируйте эти библиотеки из Xash3D.
+### Install your local build
 
-Заголовки VGUI2 размещены в `external/hl1_source_sdk`; рядом сохранены
-лицензия Source 1 SDK и `thirdpartylegalnotices.txt`.
+After a successful build and verification:
 
-При загрузке клиент динамически открывает штатный Steam `vgui2.dll`, проверяет
-точные версии GoldSrc-интерфейсов и публикует `VClientVGUI001`. Жёсткого импорта
-`vgui2.dll` у `client.dll` намеренно нет, поэтому при неудаче остаётся рабочий
-VGUI1 fallback. VGUI2-панель регистрируется напрямую как `IClientPanel`, без
-несовместимого статического `vgui_controls.lib`. Команда `cs_vgui2_status`
-показывает состояние модуля, фабрики, viewport и каждого интерфейса.
+1. Close Counter-Strike.
+2. Back up `Half-Life\cstrike\cl_dlls\client.dll`.
+3. Copy `build\Release\client.dll` over the game's client DLL.
+4. Launch with `-insecure -dev -console`.
+5. Test locally with `map de_dust2`.
 
-## Безопасная установка и проверка
+## Useful console commands
 
-1. Закройте игру и сделайте резервную копию
-   `Half-Life/cstrike/cl_dlls/client.dll`.
-2. Скопируйте новую DLL в `Half-Life/cstrike/cl_dlls/client.dll`.
-3. Для теста добавьте параметры запуска `-insecure -dev -console`.
-4. Сначала проверьте локально: `map de_dust2`.
-5. В консоли можно отдельно открыть `cs_vgui_team`, `cs_vgui_class_t`,
-   `cs_vgui_class_ct` или `cs_vgui_buy`, а закрыть панель командой
-   `cs_vgui_hide`. `cs_vgui_reload_commandmenu` перечитывает
-   `commandmenu.txt`, а `cs_test_centertext` проверяет центральное объявление.
-6. Проверьте движение и мышь, выбор команды, покупку, стрельбу, HUD,
-   scoreboard, spectator mode и голос.
+```cfg
+cs_vgui_team                 // open team selection
+cs_vgui_class_t              // open Terrorist model selection
+cs_vgui_class_ct             // open Counter-Terrorist model selection
+cs_vgui_buy                  // open the buy menu
+cs_vgui_hide                 // close the active VGUI panel
+cs_vgui2_status              // print VGUI2 interface status
+cs_vgui_reload_commandmenu   // reload commandmenu.txt
+cs_test_centertext           // test the centered text HUD layer
+```
 
-Переменная `cs_vgui_enable 0` полностью отключает новый viewport и возвращает
-текстовые меню; значение `1` включает его обратно при следующем обновлении
-userinfo.
+Disable the new viewport and use classic text menus:
 
-Диагностическая MinGW-сборка пишет этапы запуска и обработку серверных
-сообщений в `%TEMP%\cs16_goldsrc_startup.log`. Записи вида `enter` и `complete`
-образуют пары: если игра закрылась после непарной строки `enter`, эта строка
-показывает callback, внутри которого произошёл сбой. Диагностическая сборка
-также включает подробную покадровую трассировку после `joinclass` и записывает
-код исключения, модуль и RVA аварийной инструкции. Она защищает sign-on от
-отсутствующего локального игрока и нестандартного значения имени карты.
+```cfg
+cs_vgui_enable 0
+```
 
-`-insecure` обязателен для разработки и тестирования изменённого клиентского
-модуля. Не подключайтесь с ним к VAC-secured серверам.
+Re-enable it with `cs_vgui_enable 1`.
 
-Если GoldSrc получил пока не реализованный `VGUIMenu` (например, радио), клиент
-переключит userinfo обратно на текстовые меню и попросит открыть меню ещё раз.
+### Radar
 
-## Откат
+```cfg
+cl_radar_style 1          // 0 = classic markers without the new grid
+cl_radar_alpha 180        // grid and marker intensity, 40-255
+cl_radar_show_location 1  // show the current location below the radar
+```
 
-Верните резервную копию `client.dll`. Если копии нет: Steam → Counter-Strike →
-Properties → Installed Files → Verify integrity of game files.
+### Spectator HUD
 
-## Статус
+```cfg
+cl_spectator_hud_modern 1 // 0 = classic spectator HUD
+```
 
-R11 прошёл реальный игровой smoke test: подключение, spawn, HUD, radar,
-стрельба, VGUI buy menu, scoreboard, радио и death notice работают. R12
-добавляет полноценное меню `H`, исправляет дублирование центральных сообщений
-и проходит проверку PE32/x86, 44 экспортов и импортов. Коррекция поз удалённых
-игроков остаётся отдельной задачей studio renderer.
+### Steam and Discord presence
+
+Steam Rich Presence is enabled by default and displays the current map:
+
+```cfg
+cl_steam_rich_presence 1 // 0 = disabled
+```
+
+Discord RPC requires an Application ID from the
+[Discord Developer Portal](https://discord.com/developers/applications):
+
+```cfg
+cl_discord_appid "123456789012345678"
+cl_discord_rpc 1
+```
+
+Discord must be running on the same computer. Disable the integration with
+`cl_discord_rpc 0`.
+
+## Troubleshooting
+
+- **MSB8020 / v145 was not found:** install Visual Studio 2026 and the MSVC v145
+  x64/x86 build tools through Visual Studio Installer.
+- **Windows SDK was not found:** add a Windows 10 or Windows 11 SDK under
+  **Visual Studio Installer → Individual components**.
+- **The DLL has the wrong architecture:** build with `Platform=x86`; never use
+  x64 for the Steam GoldSrc client.
+- **Windows cannot replace the DLL:** close Counter-Strike and wait for the game
+  process to exit before copying the file.
+- **`SDL2.dll` or `vgui.dll` is missing:** verify the Counter-Strike files in
+  Steam. Do not use DLLs copied from Xash3D.
+- **The VGUI2 viewport does not start:** run `cs_vgui2_status`. The client keeps a
+  VGUI1 fallback when the required Steam interfaces are unavailable.
+- **An unimplemented `VGUIMenu` opens:** the client falls back to the classic
+  text menu. Open the menu again after the fallback is applied.
+
+Debug builds write startup and server-message traces to:
+
+```text
+%TEMP%\cs16_goldsrc_startup.log
+```
+
+## Technical notes
+
+The DLL is based on the standard Half-Life client lifecycle, with Counter-Strike
+HUD, event, and shared-weapon code adapted from
+[Velaron/cs16-client](https://github.com/Velaron/cs16-client).
+
+The VGUI2 client dynamically opens Steam's `vgui2.dll`, validates the required
+GoldSrc interfaces, and publishes `VClientVGUI001`. It deliberately avoids a
+hard `vgui2.dll` import so that VGUI1 remains available as a fallback. The VGUI2
+panel is registered directly as an `IClientPanel`, without linking an
+incompatible static `vgui_controls.lib`.
+
+Server-only callbacks such as `PRECACHE_MODEL`, `PRECACHE_SOUND`, and `SET_MODEL`
+are isolated from the client prediction adapter. This allows shared weapon code
+to run through `HUD_PostRunCmd` without calling unavailable server functions.
+
+## License and credits
+
+This repository is distributed under the GNU General Public License v3.0. See
+[`LICENSE.txt`](LICENSE.txt).
+
+VGUI2 headers derived from the Source 1 SDK are stored under
+`external/hl1_source_sdk` together with Valve's license and third-party notices.
+
+Credits:
+
+- Valve and the Half-Life SDK contributors.
+- [Velaron/cs16-client](https://github.com/Velaron/cs16-client) for the
+  Counter-Strike client code used as an upstream reference.
