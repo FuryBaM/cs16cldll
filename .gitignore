@@ -9,6 +9,9 @@
 .vscode/
 .idea/
 
+# Codex local workspace and upload artifacts
+.codex*
+
 # Build trees (any folder named build, bin, obj, out, x64, x86, etc.)
 **/[Bb]uild*/
 **/[Bb]in*/
