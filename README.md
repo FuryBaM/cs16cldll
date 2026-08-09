@@ -15,6 +15,7 @@ engine, renderer, or UI APIs.
 
 [Download the latest release](https://github.com/FuryBaM/cs16-goldsrc-client/releases/latest)
 · [Browse the source](https://github.com/FuryBaM/cs16-goldsrc-client)
+· [View the roadmap](ROADMAP.md)
 · [Report an issue](https://github.com/FuryBaM/cs16-goldsrc-client/issues)
 
 ## Steam Guides
