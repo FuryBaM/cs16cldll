@@ -340,6 +340,13 @@ Server-only callbacks such as `PRECACHE_MODEL`, `PRECACHE_SOUND`, and `SET_MODEL
 are isolated from the client prediction adapter. This allows shared weapon code
 to run through `HUD_PostRunCmd` without calling unavailable server functions.
 
+## Support the project
+
+If you find this project useful and would like to support ongoing development, bug fixes, and feature updates:
+
+- 🌐 **[Open Collective](https://opencollective.com/cs16-goldsrc-client)** — Transparent recurring or one-time contributions.
+- ⚡ **[Boosty](https://boosty.to/furybam)** — Support via cards (CIS / local payment options).
+
 ## License and credits
 
 This repository is distributed under the GNU General Public License v3.0. See
