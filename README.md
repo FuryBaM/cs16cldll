@@ -346,6 +346,8 @@ If you find this project useful and would like to support ongoing development, b
 
 - 🌐 **[Open Collective](https://opencollective.com/cs16-goldsrc-client)** — Transparent recurring or one-time contributions.
 - ⚡ **[Boosty](https://boosty.to/furybam)** — Support via cards (CIS / local payment options).
+- 🪙 **USDT (TON):** `UQCXmlA7IMUDc-RKbj9nKP14AuF4OAVjqCJA6ukQNZVsrbfs`
+- 🪙 **USDT (TRC20):** `TJZCmbbwVrtnTNtvoDTESReFqg1uQG6cAs`
 
 ## License and credits
 
