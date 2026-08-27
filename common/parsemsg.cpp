@@ -146,8 +146,9 @@ char* READ_STRING( void )
 		if ( giRead+1 > giSize )
 			break; // no more characters
 
-		c = READ_CHAR();
-		if (c == -1 || c == 0)
+		// Unsigned: 0xFF is a valid CP1251 character, not end of buffer.
+		c = READ_BYTE();
+		if (giBadRead || c == 0)
 			break;
 		string[l] = c;
 		l++;

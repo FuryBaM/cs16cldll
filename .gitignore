@@ -11,6 +11,7 @@
 
 # Codex local workspace and upload artifacts
 .codex*
+steam_appid.txt
 
 # Build trees (any folder named build, bin, obj, out, x64, x86, etc.)
 **/[Bb]uild*/

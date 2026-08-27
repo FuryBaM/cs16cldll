@@ -114,6 +114,9 @@
     <ClCompile Include="ui\common\cs_localize.cpp">
       <Filter>Исходные файлы\ui\common</Filter>
     </ClCompile>
+    <ClCompile Include="ui\common\hud_style.cpp">
+      <Filter>Исходные файлы\ui\common</Filter>
+    </ClCompile>
     <ClCompile Include="ui\vgui1\cs_vgui_bridge.cpp">
       <Filter>Исходные файлы\ui\vgui1</Filter>
     </ClCompile>
@@ -495,6 +498,9 @@
       <Filter>Файлы заголовков\ui\vgui2</Filter>
     </ClInclude>
     <ClInclude Include="ui\common\cs_localize.h">
+      <Filter>Файлы заголовков\ui\common</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\common\hud_style.h">
       <Filter>Файлы заголовков\ui\common</Filter>
     </ClInclude>
     <ClInclude Include="com_weapons.h">

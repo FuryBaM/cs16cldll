@@ -7,6 +7,7 @@
 #include "ammo.h"
 #include "pm_shared.h"
 #include "platform/steam_integration.h"
+#include "ui/common/hud_style.h"
 
 #include <ctype.h>
 
@@ -15,8 +16,6 @@
 
 namespace
 {
-cvar_t* g_modernSpectatorHud = NULL;
-
 void DrawCenteredHudString(int centerX, int y, const char* text,
     int r, int g, int b)
 {
@@ -167,6 +166,7 @@ void DrawObservedPlayerCard(int target, int textTall)
 
 DECLARE_MESSAGE(m_SpectatorGui, SpecHealth)
 DECLARE_MESSAGE(m_SpectatorGui, SpecHealth2)
+DECLARE_COMMAND(m_SpectatorGui, ToggleSpectatorMenu)
 
 int CHudSpectatorGui::Init()
 {
@@ -174,11 +174,16 @@ int CHudSpectatorGui::Init()
     HOOK_MESSAGE(SpecHealth);
     HOOK_MESSAGE(SpecHealth2);
 
+    // Duck (CTRL by default) toggles the spectator panels, like it does in
+    // the stock client. The same command is exposed to the console so it can
+    // be bound to another key.
+    HOOK_COMMAND("_spec_toggle_menu", ToggleSpectatorMenu);
+
     gHUD.AddHudElem(this);
-    g_modernSpectatorHud = CVAR_CREATE("cl_spectator_hud_modern", "1",
-        FCVAR_ARCHIVE);
+    CS16_HudStyleInit();
     m_iFlags = HUD_DRAW;
     m_bBombPlanted = false;
+    m_menuFlags = ROOT_MENU;
     label.m_szMap[0] = '\0';
     return 1;
 }
@@ -194,12 +199,20 @@ void CHudSpectatorGui::Shutdown()
     // ничего
 }
 
-// spectator_gui.cpp
-void CHudSpectatorGui::UserCmd_ToggleSpectatorMenu() {}
+// Shows and hides the spectator panels. The stock client opens its VGUI
+// spectator menu here; this port draws the panels itself, so duck simply
+// switches them off for an unobstructed view and back on again.
+void CHudSpectatorGui::UserCmd_ToggleSpectatorMenu()
+{
+    m_menuFlags ^= ROOT_MENU;
+}
 
 int CHudSpectatorGui::Draw(float flTime)
 {
     if (!g_iUser1)  // не в режиме спектатора
+        return 1;
+
+    if (!(m_menuFlags & ROOT_MENU))  // panels hidden with duck
         return 1;
 
     CalcAllNeededData();
@@ -210,7 +223,7 @@ int CHudSpectatorGui::Draw(float flTime)
     // console font nearly pixel-sized; at 1080p the old formula produced two
     // mostly empty 216 px bars around 13 px text. Size the bars from the real
     // font metrics instead.
-    const int textTall = max(gHUD.GetCharHeight(), 13);
+    const int textTall = max(DrawUtils::HudTextTall(), 13);
     const int lineGap = max(textTall / 3, 3);
     const int topPadding = max(textTall, 10);
     const int topBarTall = max(64,
@@ -219,7 +232,7 @@ int CHudSpectatorGui::Draw(float flTime)
     const int firstLineY = topPadding;
     const int secondLineY = firstLineY + textTall + lineGap;
 
-    if (g_modernSpectatorHud && g_modernSpectatorHud->value > 0.0f)
+    if (CS16_HudStyleModern(CS16_HUD_SPECTATOR))
     {
         const int centerPanelWide = ScreenWidth >= 1000 ? 180 : 140;
         const int topBarTall = max(58, textTall * 3 + 14);
@@ -351,15 +364,12 @@ int CHudSpectatorGui::MsgFunc_SpecHealth2(const char* name, int size, void* buf)
 void CHudSpectatorGui::InitHUDData()
 {
     m_bBombPlanted = false;
+    m_menuFlags = ROOT_MENU;
     label.m_szMap[0] = '\0';
 }
 
 void CHudSpectatorGui::Reset()
 {
     m_bBombPlanted = false;
-    if (m_menuFlags & ROOT_MENU)
-    {
-        UserCmd_ToggleSpectatorMenu(); // this will remove any submenus;
-        m_menuFlags = 0;
-    }
+    m_menuFlags = ROOT_MENU; // drop any submenu, panels come back visible
 }

@@ -35,6 +35,7 @@ version.
 #include "hud_spectator.h"
 #include "platform/steam_integration.h"
 #include "ui/vgui2/cs_vgui2.h"
+#include "ui/common/hud_style.h"
 #ifndef M_PI
 #define M_PI		3.14159265358979323846	// matches value in gcc v2 math.h
 #endif
@@ -80,6 +81,11 @@ static byte	r_RadarFlippedT[8][8] =
 
 static byte	data2D[BLOCK_SIZE_MAX*4];	// intermediate texbuffer
 
+// World units per radar pixel. With the stock 128 px sprite this is the radius
+// the radar covers: 32 reaches 2048 units, which puts most of a map inside the
+// dial and leaves every marker huddled near the middle.
+static cvar_t *cl_radar_scale = NULL;
+
 DECLARE_MESSAGE(m_Radar, Radar)
 DECLARE_MESSAGE(m_Radar, BombDrop)
 DECLARE_MESSAGE(m_Radar, BombPickup)
@@ -103,11 +109,13 @@ int CHudRadar::Init()
 	m_iFlags = HUD_DRAW;
 
 	cl_radartype = CVAR_CREATE( "cl_radartype", "0", FCVAR_ARCHIVE );
-	cl_radar_style = CVAR_CREATE( "cl_radar_style", "1", FCVAR_ARCHIVE );
 	cl_radar_alpha = CVAR_CREATE( "cl_radar_alpha", "180", FCVAR_ARCHIVE );
+	cl_radar_scale = CVAR_CREATE( "cl_radar_scale", "32", FCVAR_ARCHIVE );
 	cl_radar_show_location = CVAR_CREATE( "cl_radar_show_location", "1", FCVAR_ARCHIVE );
-	cl_radar_overview = CVAR_CREATE( "cl_radar_overview", "1", FCVAR_ARCHIVE );
-	cl_team_roster = CVAR_CREATE( "cl_team_roster", "1", FCVAR_ARCHIVE );
+
+	// cl_radar_overview, cl_radar_style and cl_team_roster belong to the
+	// vanilla/modern switch and are registered by CS16_HudStyleInit().
+	CS16_HudStyleInit();
 
 	gHUD.AddHudElem( this );
 	return 1;
@@ -257,9 +265,11 @@ int CHudRadar::Draw(float flTime)
 	int iTeamNumber = g_PlayerExtraInfo[ gHUD.m_Scoreboard.m_iPlayerNum ].teamnumber;
 	int r, g, b;
 	gHUD.m_Scoreboard.GetAllPlayersInfo();
-	DrawTopRoster();
 
-	if( cl_radar_overview->value > 0.0f &&
+	if( CS16_HudStyleModern( CS16_HUD_TOPBAR ) )
+		DrawTopRoster();
+
+	if( CS16_HudStyleModern( CS16_HUD_RADAR ) &&
 		DrawOverviewRadar( flTime, iTeamNumber ) )
 		return 0;
 
@@ -274,7 +284,7 @@ int CHudRadar::Draw(float flTime)
 		SPR_DrawAdditive( 0, 0, 0, &m_hRadarOpaque.rect );
 	}
 
-	if( cl_radar_style->value > 0.0f )
+	if( CS16_HudStyleModern( CS16_HUD_RADAR_GUIDE ) )
 		DrawGuide();
 
 	for(int i = 0; i < 33; i++)
@@ -314,7 +324,7 @@ int CHudRadar::Draw(float flTime)
 		// calc radar position
 		Vector pos = WorldToRadar(gHUD.m_vecOrigin, g_PlayerExtraInfo[i].origin, gHUD.m_vecAngles);
 
-		if( cl_radar_style->value > 0.0f )
+		if( CS16_HudStyleModern( CS16_HUD_RADAR_GUIDE ) )
 			DrawZAxis( Vector(pos.x + 1, pos.y + 1, pos.z), 0, 0, 0, 180 );
 		DrawZAxis( pos, r, g, b,
 			min( 255, max( 40, (int)cl_radar_alpha->value ) ) );
@@ -323,7 +333,27 @@ int CHudRadar::Draw(float flTime)
 	// Terrorist specific code( C4 Bomb )
 	if( g_PlayerExtraInfo[gHUD.m_Scoreboard.m_iPlayerNum].teamnumber == TEAM_TERRORIST )
 	{
-		if ( !g_PlayerExtraInfo[33].dead &&
+		// BombDrop only carries a position while the bomb lies on the ground;
+		// BombPickup marks slot 33 dead the moment somebody grabs it. Point the
+		// marker at the carrier instead, so the team never loses track of it.
+		if( g_PlayerExtraInfo[33].dead )
+		{
+			for( int i = 1; i <= MAX_PLAYERS; i++ )
+			{
+				if( i == gHUD.m_Scoreboard.m_iPlayerNum )
+					continue; // our own C4 is on the HUD, not the radar
+
+				if( !g_PlayerExtraInfo[i].has_c4 || g_PlayerExtraInfo[i].dead ||
+					g_PlayerExtraInfo[i].teamnumber != TEAM_TERRORIST )
+					continue;
+
+				Vector pos = WorldToRadar( gHUD.m_vecOrigin,
+					g_PlayerExtraInfo[i].origin, gHUD.m_vecAngles );
+				DrawZAxis( pos, 255, 0, 0, 255 );
+				break;
+			}
+		}
+		else if ( !g_PlayerExtraInfo[33].dead &&
 			 g_PlayerExtraInfo[33].radarflashes &&
 			 FlashTime( flTime, &g_PlayerExtraInfo[33] ))
 		{
@@ -479,7 +509,7 @@ bool CHudRadar::DrawOverviewRadar(float flTime, int teamNumber)
 
 void CHudRadar::DrawTopRoster()
 {
-	if( !cl_team_roster || cl_team_roster->value <= 0.0f || g_iUser1 )
+	if( g_iUser1 )
 		return;
 
 	int teams[2][MAX_PLAYERS];
@@ -638,7 +668,12 @@ void CHudRadar::DrawFlippedT( int x, int y, int r, int g, int b, int a )
 Vector CHudRadar::WorldToRadar(const Vector vPlayerOrigin, const Vector vObjectOrigin, const Vector vAngles  )
 {
 	Vector2D diff = vObjectOrigin.Make2D() - vPlayerOrigin.Make2D();
-	const float RADAR_SCALE = 32.0f;
+
+	float RADAR_SCALE = cl_radar_scale ? cl_radar_scale->value : 32.0f;
+	if( RADAR_SCALE < 4.0f )
+		RADAR_SCALE = 4.0f;
+	else if( RADAR_SCALE > 128.0f )
+		RADAR_SCALE = 128.0f;
 
 	// Supply epsilon values to avoid divide-by-zero
 	if( diff.x == 0 )
@@ -679,7 +714,11 @@ int CHudRadar::MsgFunc_BombDrop(const char *pszName, int iSize, void *pbuf)
 
 	if( Flag ) // bomb planted
 	{
-		gHUD.m_SpectatorGui.m_bBombPlanted = 0;
+		// The round timer is replaced by the bomb state from here on, so the
+		// flag has to be raised, not cleared: the spectator HUD reads it to
+		// show "C4 PLANTED" in place of the countdown. Reset() lowers it again
+		// at the start of the next round.
+		gHUD.m_SpectatorGui.m_bBombPlanted = true;
 		gHUD.m_Timer.m_iFlags = 0;
 	}
 	return 1;

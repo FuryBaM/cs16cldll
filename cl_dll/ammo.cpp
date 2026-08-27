@@ -884,9 +884,20 @@ void CHudAmmo::UserCmd_Close(void)
 		gpLastSel = gpActiveSel;
 		gpActiveSel = NULL;
 		PlaySound("common/wpn_hudoff.wav", 1);
+		return;
 	}
-	else
-		ClientCmd("escape");
+
+	// Escape is bound to cancelselect, and the engine runs that binding instead
+	// of handing the key press to HUD_Key_Event. This is therefore the only
+	// place the client gets to close its own menus, and "escape" below is what
+	// brings up the pause menu -- so it must stay the last resort.
+	if (CS16_ConsumeMenuEscapeHandled())
+		return;
+
+	if (CS16_CloseTopmostMenu())
+		return;
+
+	ClientCmd("escape");
 }
 
 
@@ -1600,8 +1611,11 @@ extern "C" bool V_RecoilCrosshairOffset(int w, int h, int& dx, int& dy)
 	const float sx = -tanf(dyaw) / tanf(fovx * 0.5f) * (w * 0.5f);
 	const float sy = tanf(dpitch) / tanf(fovy * 0.5f) * (h * 0.5f);
 
-	float scale = cl_recoil_crosshair_scale->value;
-	if (scale <= 0.0f) scale = 1.0f;
+	// 0 pins the crosshair to the centre of the screen, which is how the stock
+	// client behaves; any positive value lets it ride the recoil.
+	const float scale = cl_recoil_crosshair_scale->value;
+	if (scale <= 0.0f)
+		return false;
 
 	dx = (int)(sx * scale);
 	dy = (int)(sy * scale);

@@ -47,13 +47,43 @@ void SetCenterMessage(const char* text)
 
 	strncpy(g_szCenterMessage, text, sizeof(g_szCenterMessage));
 	g_szCenterMessage[sizeof(g_szCenterMessage) - 1] = '\0';
+
+	// A message whose arguments never arrived must not put the raw "%s1" on
+	// the screen; drop the placeholder and the gap it leaves behind, so the
+	// text still reads as a plain sentence.
+	CS16_StripFormatPlaceholders(g_szCenterMessage);
+	const char* trimmed = g_szCenterMessage;
+	while (*trimmed == ' ')
+		++trimmed;
+	if (trimmed != g_szCenterMessage)
+		memmove(g_szCenterMessage, trimmed, strlen(trimmed) + 1);
 	g_flCenterMessageUntil = gHUD.m_flTime + 3.0f;
 	gHUD.m_TextMessage.m_iFlags |= HUD_DRAW;
 }
 
+// cs_test_centertext [token] [arg1..arg4]
+//
+// Runs a message through the same lookup and %s1 substitution the server
+// path uses, so a token that renders wrong can be reproduced without a
+// server: "cs_test_centertext #Cant_buy 90".
 void CS16_TestCenterMessage_f()
 {
-	SetCenterMessage(CS16_Localize("#Bomb_Planted"));
+	const int argc = gEngfuncs.Cmd_Argc();
+	const char* token = argc > 1 ? gEngfuncs.Cmd_Argv(1) : "#Bomb_Planted";
+
+	static char args[4][MAX_TEXTMSG_STRING];
+	const char* arguments[4] = { args[0], args[1], args[2], args[3] };
+	for (int i = 0; i < 4; i++)
+	{
+		const char* value = argc > i + 2 ? gEngfuncs.Cmd_Argv(i + 2) : "";
+		strncpy(args[i], CS16_Localize(value), MAX_TEXTMSG_STRING);
+		args[i][MAX_TEXTMSG_STRING - 1] = 0;
+	}
+
+	char text[MAX_TEXTMSG_STRING];
+	CS16_LocalizeFormat(text, sizeof(text), CS16_Localize(token),
+		arguments, 4);
+	SetCenterMessage(text);
 }
 }
 
@@ -77,6 +107,8 @@ int CHudTextMessage::Init(void)
 
 void CHudTextMessage::Reset(void)
 {
+	CS16_LocalizeRetryIfEmpty();
+
 	g_szCenterMessage[0] = '\0';
 	g_flCenterMessageUntil = 0.0f;
 	m_iFlags &= ~HUD_DRAW;
@@ -235,7 +267,14 @@ int CHudTextMessage::MsgFunc_TextMsg(const char* pszName, int iSize, void* pbuf)
 	int clientIdx = -1;
 
 	static char szBuf[6][MAX_TEXTMSG_STRING];
-	char* msg_text = LookupString(reader.ReadString(), &msg_dest);
+
+	// ReadString hands back a shared static buffer, so keep the raw name before
+	// the lookup overwrites it.
+	static char szRawName[MAX_TEXTMSG_STRING];
+	strncpy(szRawName, reader.ReadString(), MAX_TEXTMSG_STRING);
+	szRawName[MAX_TEXTMSG_STRING - 1] = 0;
+
+	char* msg_text = LookupString(szRawName, &msg_dest);
 	msg_text = strncpy(szBuf[0], msg_text, MAX_TEXTMSG_STRING);
 	szBuf[0][MAX_TEXTMSG_STRING - 1] = 0;
 
@@ -253,7 +292,6 @@ int CHudTextMessage::MsgFunc_TextMsg(const char* pszName, int iSize, void* pbuf)
 
 	char* psz = szBuf[5];
 	const char* arguments[4] = { szBuf[1], szBuf[2], szBuf[3], szBuf[4] };
-
 
 	switch (msg_dest)
 	{

@@ -29,11 +29,8 @@ public:
 
 private:
     cvar_t* cl_radartype;
-    cvar_t* cl_radar_style;
     cvar_t* cl_radar_alpha;
     cvar_t* cl_radar_show_location;
-    cvar_t* cl_radar_overview;
-    cvar_t* cl_team_roster;
 
     void DrawPlayerLocation(int y);
     bool DrawOverviewRadar(float flTime, int teamNumber);

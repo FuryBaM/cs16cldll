@@ -6,6 +6,7 @@
 #include <vgui/Cursor.h>
 #include <vgui/IInput.h>
 #include <vgui/IPanel.h>
+#include <vgui/IScheme.h>
 #include <vgui/ISurface.h>
 #include <vgui/IVGui.h>
 #include <vgui/KeyCode.h>
@@ -19,6 +20,7 @@ extern "C" void CS16VGUI_ClientCommand(const char* command);
 extern "C" void CS16VGUI_SetMouseVisible(int visible);
 extern "C" void CS16VGUI_Print(const char* text);
 extern "C" void CS16VGUI_Trace(const char* stage);
+void CS16_MarkMenuEscapeHandled(void);
 
 namespace
 {
@@ -236,6 +238,7 @@ public:
           m_entryCount(0), m_hoveredEntry(-1), m_selectedEntry(-1),
           m_hudTextDrawCount(0), m_hudImageDrawCount(0),
           m_hudRectDrawCount(0),
+          m_scheme(NULL), m_schemeHandle(0),
           m_hudFont(vgui2::INVALID_FONT), m_font(vgui2::INVALID_FONT),
           m_titleFont(vgui2::INVALID_FONT),
           m_infoFont(vgui2::INVALID_FONT),
@@ -267,6 +270,8 @@ public:
         m_panel = Interface<vgui2::IPanel>(factories, count, "VGUI_Panel007");
         m_surface = Interface<vgui2::ISurface>(factories, count, "VGUI_Surface026");
         m_input = Interface<vgui2::IInput>(factories, count, "VGUI_Input004");
+        m_scheme = Interface<vgui2::ISchemeManager>(factories, count,
+            "VGUI_Scheme009");
         if (!m_ivgui || !m_panel || !m_surface || !m_input)
             return false;
 
@@ -318,6 +323,8 @@ public:
         m_panel = NULL;
         m_surface = NULL;
         m_input = NULL;
+        m_scheme = NULL;
+        m_schemeHandle = 0;
         m_hudFont = vgui2::INVALID_FONT;
         m_font = vgui2::INVALID_FONT;
         m_titleFont = vgui2::INVALID_FONT;
@@ -735,6 +742,17 @@ public:
         return true;
     }
 
+    bool IsMenuVisible() const { return m_visible; }
+    int GetCurrentMenu() const { return m_visible ? m_currentMenu : 0; }
+
+    int GetHudFontTall()
+    {
+        EnsureFonts();
+        if (!m_surface || m_hudFont == vgui2::INVALID_FONT)
+            return 0;
+        return m_surface->GetFontTall(m_hudFont);
+    }
+
     void HideMenu()
     {
         m_currentMenu = 0;
@@ -782,6 +800,7 @@ public:
         if (keynum == 27)
         {
             HideMenu();
+            CS16_MarkMenuEscapeHandled();
             return true;
         }
         if (keynum >= 'a' && keynum <= 'z')
@@ -1079,8 +1098,47 @@ private:
         }
     }
 
+    // Counter-Strike defines its fonts in cstrike/resource/ClientScheme.res.
+    // Pulling them from there is what makes the client's text match the rest of
+    // the game instead of an approximation created in code.
+    vgui2::HFont SchemeFont(const char* name)
+    {
+        if (!m_scheme || !name || !name[0])
+            return vgui2::INVALID_FONT;
+
+        if (!m_schemeHandle)
+        {
+            m_schemeHandle = m_scheme->LoadSchemeFromFile(
+                "resource/ClientScheme.res", "ClientScheme");
+            if (!m_schemeHandle)
+                m_schemeHandle = m_scheme->GetDefaultScheme();
+            if (!m_schemeHandle)
+                return vgui2::INVALID_FONT;
+        }
+
+        vgui2::IScheme* scheme = m_scheme->GetIScheme(m_schemeHandle);
+        return scheme ? scheme->GetFont(name, false) : vgui2::INVALID_FONT;
+    }
+
+    // Tries the scheme names in order, then gives up so the caller can fall
+    // back to creating a font by hand.
+    vgui2::HFont SchemeFont(const char* first, const char* second)
+    {
+        const vgui2::HFont font = SchemeFont(first);
+        return font != vgui2::INVALID_FONT ? font : SchemeFont(second);
+    }
+
     void EnsureFonts()
     {
+        if (m_hudFont == vgui2::INVALID_FONT)
+            m_hudFont = SchemeFont("Default", "DefaultSmall");
+        if (m_font == vgui2::INVALID_FONT)
+            m_font = SchemeFont("Default", "DefaultSmall");
+        if (m_titleFont == vgui2::INVALID_FONT)
+            m_titleFont = SchemeFont("MenuLarge", "DefaultLarge");
+        if (m_infoFont == vgui2::INVALID_FONT)
+            m_infoFont = SchemeFont("DefaultSmall", "Default");
+
         if (m_hudFont == vgui2::INVALID_FONT)
         {
             m_hudFont = m_surface->CreateFont();
@@ -2058,6 +2116,8 @@ private:
     vgui2::IPanel* m_panel;
     vgui2::ISurface* m_surface;
     vgui2::IInput* m_input;
+    vgui2::ISchemeManager* m_scheme;
+    vgui2::HScheme m_schemeHandle;
     vgui2::VPANEL m_vpanel;
     vgui2::VPANEL m_hudVPanel;
     CCS16HudTextPanel m_hudPanelClient;
@@ -2160,6 +2220,9 @@ public:
     bool IsReady() const { return m_initialized && m_viewport.IsReady(); }
     bool ShowMenu(int menuId) { return IsReady() && m_viewport.ShowMenu(menuId); }
     void HideMenu() { if (IsReady()) m_viewport.HideMenu(); }
+    bool IsMenuVisible() const { return IsReady() && m_viewport.IsMenuVisible(); }
+    int GetCurrentMenu() const { return IsReady() ? m_viewport.GetCurrentMenu() : 0; }
+    int GetHudFontTall() { return IsReady() ? m_viewport.GetHudFontTall() : 0; }
     bool KeyInput(int keynum) { return IsReady() && m_viewport.KeyInput(keynum); }
     void SetTeam(int team) { if (IsReady()) m_viewport.SetTeam(team); }
     void SetLegacyCursorVisible(bool visible)
@@ -2229,6 +2292,21 @@ extern "C" int CS16VGUI2_ShowMenu(int menuId)
 extern "C" void CS16VGUI2_HideMenu(void)
 {
     g_clientVGUI.HideMenu();
+}
+
+extern "C" int CS16VGUI2_GetHudFontTall(void)
+{
+    return g_clientVGUI.GetHudFontTall();
+}
+
+extern "C" int CS16VGUI2_IsMenuVisible(void)
+{
+    return g_clientVGUI.IsMenuVisible() ? 1 : 0;
+}
+
+extern "C" int CS16VGUI2_GetCurrentMenu(void)
+{
+    return g_clientVGUI.GetCurrentMenu();
 }
 
 extern "C" int CS16VGUI2_KeyInput(int down, int keynum, const char*)

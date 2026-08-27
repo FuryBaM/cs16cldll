@@ -4,6 +4,7 @@
 #include "r_efx.h"
 #include "entity_types.h"
 #include "draw_util.h"
+#include "ui/common/hud_style.h"
 #include "platform/steam_integration.h"
 
 #include <stdio.h>
@@ -151,6 +152,7 @@ int CVoiceStatus::Draw(float)
 	if (gHUD.m_iHideHUDDisplay & HIDEHUD_ALL)
 		return 1;
 
+	const bool modern = CS16_HudStyleModern(CS16_HUD_VOICE);
 	const int iconWidth = m_VoiceHeadModel ? SPR_Width(m_VoiceHeadModel) : 0;
 	const int iconHeight = m_VoiceHeadModel ? SPR_Height(m_VoiceHeadModel) : 0;
 	const int rowHeight = max(max(iconHeight, gHUD.m_iFontHeight), 16) + 4;
@@ -178,22 +180,41 @@ int CVoiceStatus::Draw(float)
 		m_pHelper->GetPlayerTextColor(playerIndex, teamColor);
 
 		const int textWidth = DrawUtils::HudStringLen(info.name);
-		const int avatarSize = max(12, rowHeight - 4);
-		const int avatarGap = 4;
-		const int rowWidth = 7 + avatarSize + avatarGap + iconWidth + iconGap +
-			textWidth + 6;
-		const int x = max(0, ScreenWidth - rowWidth - 8);
+		int iconX;
+		int rowWidth;
+		int x;
 
-		FillRGBABlend(x, y, rowWidth, rowHeight, 0, 0, 0, 150);
-		FillRGBABlend(x, y, 3, rowHeight,
-			teamColor[0], teamColor[1], teamColor[2], 230);
-		const int avatarX = x + 5;
-		const int avatarY = y + (rowHeight - avatarSize) / 2;
-		FillRGBABlend(avatarX, avatarY, avatarSize, avatarSize,
-			teamColor[0], teamColor[1], teamColor[2], 90);
-		CS16Steam_QueueAvatar(playerIndex, info.m_nSteamID, avatarX, avatarY,
-			avatarSize, 255, gHUD.m_flTime);
-		const int iconX = avatarX + avatarSize + avatarGap;
+		if (modern)
+		{
+			const int avatarSize = max(12, rowHeight - 4);
+			const int avatarGap = 4;
+			rowWidth = 7 + avatarSize + avatarGap + iconWidth + iconGap +
+				textWidth + 6;
+			x = max(0, ScreenWidth - rowWidth - 8);
+
+			FillRGBABlend(x, y, rowWidth, rowHeight, 0, 0, 0, 150);
+			FillRGBABlend(x, y, 3, rowHeight,
+				teamColor[0], teamColor[1], teamColor[2], 230);
+			const int avatarX = x + 5;
+			const int avatarY = y + (rowHeight - avatarSize) / 2;
+			FillRGBABlend(avatarX, avatarY, avatarSize, avatarSize,
+				teamColor[0], teamColor[1], teamColor[2], 90);
+			CS16Steam_QueueAvatar(playerIndex, info.m_nSteamID, avatarX, avatarY,
+				avatarSize, 255, gHUD.m_flTime);
+			iconX = avatarX + avatarSize + avatarGap;
+		}
+		else
+		{
+			// The stock label is a plain bar filled with the speaker's team
+			// colour, with the icon and the white name sitting on top of it.
+			const int padding = 4;
+			rowWidth = padding * 2 + iconWidth + iconGap + textWidth;
+			x = max(0, ScreenWidth - rowWidth - 8);
+
+			FillRGBABlend(x, y, rowWidth, rowHeight,
+				teamColor[0], teamColor[1], teamColor[2], 160);
+			iconX = x + padding;
+		}
 
 		if (m_VoiceHeadModel)
 		{

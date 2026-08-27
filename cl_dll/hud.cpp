@@ -35,6 +35,8 @@
 
 #include "draw_util.h"
 #include "cs_vgui.h"
+#include "ui/common/hud_style.h"
+#include "ui/common/cs_localize.h"
 
 #if _WIN32
 #define strncasecmp _strnicmp
@@ -43,13 +45,13 @@
 ref_params_t s_last;
 Vector s_punchSm(0, 0, 0);
 static char g_recoilCrosshairScaleName[] = "cl_recoil_crosshair_scale";
-static char g_recoilCrosshairScaleValue[] = "1";
+static char g_recoilCrosshairScaleValue[] = "0";
 static cvar_t g_recoilCrosshairScaleFallback =
 {
 	g_recoilCrosshairScaleName,
 	g_recoilCrosshairScaleValue,
 	0,
-	1.0f,
+	0.0f,
 	NULL
 };
 cvar_t* cl_recoil_crosshair_scale = &g_recoilCrosshairScaleFallback;
@@ -272,6 +274,10 @@ void CHud :: Init( void )
 {
 	SetGameType(); // call it first, so we will know gamedir at very early stage
 
+	// Register the vanilla/modern switch before any HUD element queries it.
+	CS16_HudStyleInit();
+	CS16_LocalizeRegisterCommands();
+
 	HOOK_COMMAND( "special", InputCommandSpecial );
 	HOOK_COMMAND( "gunsmoke", GunSmoke );
 	
@@ -314,6 +320,7 @@ void CHud :: Init( void )
 	CVAR_CREATE( "buymenu_stayon", "0", FCVAR_ARCHIVE );
 
 	hud_textmode = CVAR_CREATE( "hud_textmode", "0", FCVAR_ARCHIVE );
+	cl_hud_font  = CVAR_CREATE( "cl_hud_font", "0", FCVAR_ARCHIVE );
 	hud_colored  = CVAR_CREATE( "hud_colored", "0", FCVAR_ARCHIVE );
 	cl_righthand = CVAR_CREATE( "cl_righthand", "1", FCVAR_ARCHIVE );
 	cl_weather   = CVAR_CREATE( "cl_weather", "1", FCVAR_ARCHIVE );
@@ -326,7 +333,7 @@ void CHud :: Init( void )
 	cl_gunsmoke  = CVAR_CREATE( "cl_gunsmoke", "0", FCVAR_ARCHIVE );
 	cl_weapon_sparks = CVAR_CREATE( "cl_weapon_sparks", "1", FCVAR_ARCHIVE );
 	cl_weapon_wallpuff = CVAR_CREATE( "cl_weapon_wallpuff", "1", FCVAR_ARCHIVE );
-	if( cvar_t* recoilScale = CVAR_CREATE( "cl_recoil_crosshair_scale", "1", FCVAR_ARCHIVE ) )
+	if( cvar_t* recoilScale = CVAR_CREATE( "cl_recoil_crosshair_scale", "0", FCVAR_ARCHIVE ) )
 		cl_recoil_crosshair_scale = recoilScale;
 	zoom_sens_ratio = CVAR_CREATE( "zoom_sensitivity_ratio", "1.2", 0 );
 	m_pCvarStealMouse = CVAR_CREATE("hud_capturemouse", "1", FCVAR_ARCHIVE);

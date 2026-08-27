@@ -504,6 +504,13 @@ Called by engine every frame that client .dll is loaded
 
 void CL_DLLEXPORT HUD_Frame(double time)
 {
+	if (CS16_ConsumeMenuEscapeHookRequest())
+		CS16_CloseTopmostMenu();
+
+	const int pendingSelectionMenu = CS16_ConsumePendingSelectionMenuRequest();
+	if (pendingSelectionMenu)
+		CS16VGUI_ShowMenu(pendingSelectionMenu);
+
 	static bool tracedFirstFrame = false;
 	if (!tracedFirstFrame)
 	{

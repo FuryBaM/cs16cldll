@@ -22,6 +22,7 @@
 #include "../public/keydefs.h"
 #include "view.h"
 #include "Exports.h"
+#include "cs_vgui.h"
 
 #include <SDL2/SDL_events.h>
 #include <SDL2/SDL_mouse.h>
@@ -163,6 +164,66 @@ DWORD	s_hMouseThreadId = 0;
 HANDLE	s_hMouseThread = 0;
 HANDLE	s_hMouseQuitEvent = 0;
 HANDLE	s_hMouseDoneQuitEvent = 0;
+
+static HHOOK s_menuEscapeHook = NULL;
+static volatile LONG s_menuEscapeClosePending = 0;
+static bool s_swallowMenuEscapeUp = false;
+
+static LRESULT CALLBACK CS16_MenuEscapeKeyboardHook(int code, WPARAM key, LPARAM flags)
+{
+	if (code == HC_ACTION && key == VK_ESCAPE)
+	{
+		const bool keyUp = (flags & 0x80000000L) != 0;
+		if (!keyUp)
+		{
+			const bool clientMenuVisible = CS16VGUI_IsMenuVisible() != 0 ||
+				gHUD.m_Menu.m_fMenuDisplayed != 0;
+			if (clientMenuVisible)
+			{
+				if ((flags & 0x40000000L) == 0)
+					InterlockedExchange(&s_menuEscapeClosePending, 1);
+				s_swallowMenuEscapeUp = true;
+				return 1;
+			}
+		}
+		else if (s_swallowMenuEscapeUp)
+		{
+			s_swallowMenuEscapeUp = false;
+			return 1;
+		}
+	}
+
+	return CallNextHookEx(s_menuEscapeHook, code, key, flags);
+}
+
+void CS16_InstallMenuEscapeHook(void)
+{
+	if (!s_menuEscapeHook)
+	{
+		s_menuEscapeHook = SetWindowsHookEx(WH_KEYBOARD,
+			CS16_MenuEscapeKeyboardHook, NULL, GetCurrentThreadId());
+	}
+}
+
+void CS16_RemoveMenuEscapeHook(void)
+{
+	if (s_menuEscapeHook)
+	{
+		UnhookWindowsHookEx(s_menuEscapeHook);
+		s_menuEscapeHook = NULL;
+	}
+	InterlockedExchange(&s_menuEscapeClosePending, 0);
+	s_swallowMenuEscapeUp = false;
+}
+
+bool CS16_ConsumeMenuEscapeHookRequest(void)
+{
+	return InterlockedExchange(&s_menuEscapeClosePending, 0) != 0;
+}
+#else
+void CS16_InstallMenuEscapeHook(void) {}
+void CS16_RemoveMenuEscapeHook(void) {}
+bool CS16_ConsumeMenuEscapeHookRequest(void) { return false; }
 #endif
 
 

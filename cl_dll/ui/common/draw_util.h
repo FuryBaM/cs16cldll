@@ -43,6 +43,11 @@ extern qboolean g_accept_utf8;
 extern cvar_t *con_charset;
 extern cvar_t *cl_charset;
 
+// 0 - draw HUD strings with the original CS glyphs, falling back to the VGUI2
+//     font only for characters that font has no glyph for.
+// 1 - always use the VGUI2 font.
+extern cvar_t *cl_hud_font;
+
 
 int Con_UtfProcessChar( int in );
 int Con_UtfProcessCharForce( int in );
@@ -80,6 +85,20 @@ public:
 	}
 
 	static int HudStringLen( const char *szIt, float scale = 1 );
+
+	// Line height of the font HUD strings are actually drawn with, so layouts
+	// stay in step with cl_hud_font.
+	static inline int HudTextTall()
+	{
+		if ( !cl_hud_font || cl_hud_font->value == 0.0f )
+		{
+			const int tall = CS16VGUI2_GetHudFontTall();
+			if ( tall > 0 )
+				return tall;
+		}
+
+		return gHUD.GetCharHeight();
+	}
 
 	static inline int HudCharacterWidth( int number, bool forceUnicode = false )
 	{

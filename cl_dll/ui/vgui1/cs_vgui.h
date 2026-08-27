@@ -37,6 +37,10 @@ void CS16VGUI_ResetSession(void);
 int CS16VGUI_IsAvailable(void);
 int CS16VGUI_ShowMenu(int menuId);
 void CS16VGUI_HideMenu(void);
+// Non-zero while one of the client's own menus is on screen, so Escape can be
+// spent closing it instead of opening the engine's pause menu.
+int CS16VGUI_IsMenuVisible(void);
+int CS16VGUI_GetCurrentMenu(void);
 void CS16VGUI_DisableForSession(void);
 int CS16VGUI_KeyInput(int down, int keynum, const char* currentBinding);
 
