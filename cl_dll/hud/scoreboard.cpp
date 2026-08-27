@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include "draw_util.h"
 #include "platform/steam_integration.h"
+#include "ui/common/hud_style.h"
 
 hud_player_info_t   g_PlayerInfoList[MAX_PLAYERS+1]; // player info from the engine
 extra_player_info_t	g_PlayerExtraInfo[MAX_PLAYERS+1]; // additional player info sent directly to the client dll
@@ -44,27 +45,65 @@ int g_iTeamNumber;
 
 int xstart, xend;
 int ystart, yend;
-// relative to the side of the scoreboard
-inline int NAME_POS_START()		{ return xstart + 15; }
-inline int NAME_POS_END()		{ return xend - 350; }
-// 10 pixels gap
-inline int ATTRIB_POS_START()	{ return xend - 350; }
-inline int ATTRIB_POS_END()		{ return xend - 290; }
-// 10 pixels gap
-inline int HP_POS_START()		{ return xend - 280; }
-inline int HP_POS_END()			{ return xend - 250; }
-// 10 pixels gap
-inline int MONEY_POS_START()	{ return xend - 240; }
-inline int MONEY_POS_END()		{ return xend - 180; }
-// 10 pixels gap
-inline int KILLS_POS_START()	{ return xend - 170; }
-inline int KILLS_POS_END()		{ return xend - 110; }
-// 10 pixels gap
-inline int DEATHS_POS_START()	{ return xend - 100; }
-inline int DEATHS_POS_END()		{ return xend - 40; }
-// 20 pixels gap
-inline int PING_POS_START()		{ return xend - 40; }
-inline int PING_POS_END()		{ return xend - 10; }
+// Column edges, laid out right to left from the widest string each column can
+// hold. Hard-coded pixel offsets used to work at 640x480, but the HUD font
+// scales with the resolution, so at 1080p "DEATHS" grew past its 60 px slot and
+// ran into the ping column.
+struct ScoreColumn
+{
+	int start;	// left edge
+	int end;	// right edge
+};
+
+static ScoreColumn g_colName, g_colAttrib, g_colHp, g_colMoney;
+static ScoreColumn g_colKills, g_colDeaths, g_colPing;
+
+// Widest of a header and the values below it, so neither can spill over.
+inline int ColumnWidth( const char *header, const char *widestValue )
+{
+	return max( DrawUtils::HudStringLen( header ),
+		DrawUtils::HudStringLen( widestValue ) );
+}
+
+// Places a column to the left of "rightEdge" and returns its left edge, so the
+// next column can be chained onto it.
+inline int PlaceColumn( ScoreColumn &column, int rightEdge, int width )
+{
+	column.end = rightEdge;
+	column.start = rightEdge - width;
+	return column.start;
+}
+
+static void ComputeScoreColumns( void )
+{
+	const int gap = max( 10, DrawUtils::HudStringLen( "  " ) );
+	int edge = xend - 15;
+
+	edge = PlaceColumn( g_colPing, edge, ColumnWidth( "PING", "9999" ) ) - gap;
+	edge = PlaceColumn( g_colDeaths, edge, ColumnWidth( "DEATHS", "9999" ) ) - gap;
+	edge = PlaceColumn( g_colKills, edge, ColumnWidth( "KILLS", "9999" ) ) - gap;
+	edge = PlaceColumn( g_colMoney, edge, ColumnWidth( "MONEY", "$999999" ) ) - gap;
+	edge = PlaceColumn( g_colHp, edge, ColumnWidth( "HP", "9999" ) ) - gap;
+	edge = PlaceColumn( g_colAttrib, edge, ColumnWidth( "Bomb", "Dead" ) ) - gap;
+
+	g_colName.start = xstart + 15;
+	g_colName.end = max( g_colName.start, edge );
+}
+
+inline int NAME_POS_START()		{ return g_colName.start; }
+inline int NAME_POS_END()		{ return g_colName.end; }
+inline int ATTRIB_POS_START()	{ return g_colAttrib.start; }
+inline int ATTRIB_POS_END()		{ return g_colAttrib.end; }
+inline int HP_POS_START()		{ return g_colHp.start; }
+inline int HP_POS_END()			{ return g_colHp.end; }
+inline int MONEY_POS_START()	{ return g_colMoney.start; }
+inline int MONEY_POS_END()		{ return g_colMoney.end; }
+inline int KILLS_POS_START()	{ return g_colKills.start; }
+inline int KILLS_POS_END()		{ return g_colKills.end; }
+inline int DEATHS_POS_START()	{ return g_colDeaths.start; }
+inline int DEATHS_POS_END()		{ return g_colDeaths.end; }
+inline int PING_POS_START()		{ return g_colPing.start; }
+inline int PING_POS_END()		{ return g_colPing.end; }
 
 //#include "vgui_TeamFortressViewport.h"
 
@@ -142,15 +181,17 @@ bool CHudScoreboard :: ShouldDrawScoreboard() const
 	return false;
 }
 
-// Keep the classic compact layout at low resolutions, but give Steam avatars
-// and player names enough room on modern displays.
+// Follow the HUD font, so the rows stay as tight as the stock scoreboard.
+// Steam avatars need more room than a line of text, so the modern layout keeps
+// its own floor.
 inline int ScoreRowGap()
 {
-	if( ScreenHeight >= 1000 )
-		return 22;
-	if( ScreenHeight >= 720 )
-		return 19;
-	return 15;
+	const int gap = max( 15, DrawUtils::HudTextTall() + 2 );
+
+	if( CS16_HudStyleModern( CS16_HUD_SCOREBOARD ) )
+		return max( gap, 22 );
+
+	return gap;
 }
 
 int CHudScoreboard :: Draw( float flTime )
@@ -189,6 +230,8 @@ int CHudScoreboard :: DrawScoreboard( float fTime )
 	// list is sorted first by frags, then by deaths
 	float list_slot = 0;
 
+	ComputeScoreColumns();
+
 	// print the heading line
 
 	DrawUtils::DrawRectangle(xstart, ystart, xend - xstart, yend - ystart,
@@ -202,10 +245,10 @@ int CHudScoreboard :: DrawScoreboard( float fTime )
 		strncpy( ServerName, gHUD.m_Teamplay ? "TEAMS" : "PLAYERS", 80 );
 
 	DrawUtils::DrawHudString( NAME_POS_START(), ypos, NAME_POS_END(), ServerName, 255, 140, 0 );
-	DrawUtils::DrawHudStringReverse( HP_POS_END(), ypos, 0, "HP", 255, 140, 0 );
+	DrawUtils::DrawHudStringReverse( HP_POS_END(), ypos, HP_POS_START(), "HP", 255, 140, 0 );
 	DrawUtils::DrawHudString( MONEY_POS_START(), ypos, MONEY_POS_END(), "MONEY", 255, 140, 0 );
 	DrawUtils::DrawHudStringReverse( KILLS_POS_END(), ypos, KILLS_POS_START(), "KILLS", 255, 140, 0 );
-	DrawUtils::DrawHudString( DEATHS_POS_START(), ypos, DEATHS_POS_END(), "DEATHS", 255, 140, 0 );
+	DrawUtils::DrawHudStringReverse( DEATHS_POS_END(), ypos, DEATHS_POS_START(), "DEATHS", 255, 140, 0 );
 	DrawUtils::DrawHudStringReverse( PING_POS_END(), ypos, PING_POS_START(), "PING", 255, 140, 0 );
 
 	list_slot += 2;
@@ -427,17 +470,24 @@ int CHudScoreboard :: DrawPlayers( float list_slot, int nameoffset, const char *
 				255, 255, 255, isDead ? 7 : 15 );
 		}
 
-		const int avatarSize = min(20, ScoreRowGap() - 2);
-		const int avatarX = NAME_POS_START() + nameoffset;
-		const int avatarY = ypos + (ScoreRowGap() - avatarSize) / 2;
-		const int avatarR = g_PlayerExtraInfo[best_player].talking ? 80 : r;
-		const int avatarG = g_PlayerExtraInfo[best_player].talking ? 220 : g;
-		const int avatarB = g_PlayerExtraInfo[best_player].talking ? 90 : b;
-		FillRGBABlend( avatarX, avatarY, avatarSize, avatarSize,
-			avatarR, avatarG, avatarB, isDead ? 35 : 70 );
-		CS16Steam_QueueAvatar( best_player, pl_info->m_nSteamID,
-			avatarX, avatarY, avatarSize, isDead ? 105 : 255, gHUD.m_flTime );
-		DrawUtils::DrawHudString( avatarX + avatarSize + 5, ypos,
+		int nameX = NAME_POS_START() + nameoffset;
+
+		if( CS16_HudStyleModern( CS16_HUD_SCOREBOARD ) )
+		{
+			const int avatarSize = min(20, ScoreRowGap() - 2);
+			const int avatarX = nameX;
+			const int avatarY = ypos + (ScoreRowGap() - avatarSize) / 2;
+			const int avatarR = g_PlayerExtraInfo[best_player].talking ? 80 : r;
+			const int avatarG = g_PlayerExtraInfo[best_player].talking ? 220 : g;
+			const int avatarB = g_PlayerExtraInfo[best_player].talking ? 90 : b;
+			FillRGBABlend( avatarX, avatarY, avatarSize, avatarSize,
+				avatarR, avatarG, avatarB, isDead ? 35 : 70 );
+			CS16Steam_QueueAvatar( best_player, pl_info->m_nSteamID,
+				avatarX, avatarY, avatarSize, isDead ? 105 : 255, gHUD.m_flTime );
+			nameX = avatarX + avatarSize + 5;
+		}
+
+		DrawUtils::DrawHudString( nameX, ypos,
 			NAME_POS_END(), pl_info->name, r, g, b );
 
 		if( cl_showplayerversion->value == 0.0f )

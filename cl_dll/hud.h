@@ -1129,6 +1129,27 @@ private:
 extern CHud gHUD;
 extern cvar_t *sensitivity;
 
+// Closes the topmost menu the client has open and reports whether there was
+// one. Escape is routed here so a menu is dismissed before the engine's pause
+// menu gets a turn.
+bool CS16_CloseTopmostMenu( void );
+
+// GoldSrc can deliver one physical Escape both to the focused VGUI panel and
+// through the cancelselect binding. These helpers keep the second delivery
+// from opening GameUI after the first one has already closed the client menu.
+void CS16_MarkMenuEscapeHandled( void );
+bool CS16_ConsumeMenuEscapeHandled( void );
+void CS16_InstallMenuEscapeHook( void );
+void CS16_RemoveMenuEscapeHook( void );
+bool CS16_ConsumeMenuEscapeHookRequest( void );
+
+// Preserve a forced team/class selection flow locally. GoldSrc does not
+// resend it after the class panel has been dismissed.
+void CS16_SetClassSelectionPending( int menuId );
+void CS16_TrackSelectionMenuCommand( const char *command );
+bool CS16_ReopenPendingSelectionMenu( const char *currentBinding );
+int CS16_ConsumePendingSelectionMenuRequest( void );
+
 extern int g_iTeamNumber;
 extern int g_iUser1;
 extern int g_iUser2;

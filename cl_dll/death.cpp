@@ -22,6 +22,7 @@
 #include <string.h>
 #include <stdio.h>
 #include "draw_util.h"
+#include "ui/common/hud_style.h"
 
 float color[3];
 
@@ -44,8 +45,22 @@ struct DeathNoticeItem {
 #define MAX_DEATHNOTICES	6
 static int DEATHNOTICE_DISPLAY_TIME = 6;
 
+// The stock feed keeps four notices in a 20 px row starting 32 units down; the
+// reworked one is taller and holds more.
 #define DEATHNOTICE_TOP		38
 #define DEATHNOTICE_ROW_HEIGHT 24
+#define VANILLA_DEATHNOTICES 4
+#define VANILLA_DEATHNOTICE_TOP 32
+#define VANILLA_ROW_HEIGHT 20
+// Keep the feed off the very edge of the screen; XRES scales it with the
+// resolution so the gap looks the same at 640 and at 1920.
+#define DEATHNOTICE_RIGHT_MARGIN 8
+
+static int DeathNoticeCapacity(void)
+{
+	return CS16_HudStyleModern(CS16_HUD_KILLFEED) ? MAX_DEATHNOTICES
+		: VANILLA_DEATHNOTICES;
+}
 
 DeathNoticeItem rgDeathNoticeList[MAX_DEATHNOTICES + 1];
 
@@ -82,7 +97,12 @@ int CHudDeathNotice::Draw(float flTime)
 {
 	int x, y, r, g, b, i;
 
-	for (i = 0; i < MAX_DEATHNOTICES; i++)
+	const bool modern = CS16_HudStyleModern(CS16_HUD_KILLFEED);
+	const int capacity = DeathNoticeCapacity();
+	const int rowHeight = modern ? DEATHNOTICE_ROW_HEIGHT : VANILLA_ROW_HEIGHT;
+	const int topOffset = modern ? DEATHNOTICE_TOP : VANILLA_DEATHNOTICE_TOP;
+
+	for (i = 0; i < capacity; i++)
 	{
 		if (rgDeathNoticeList[i].iId == 0)
 			break;  // we've gone through them all
@@ -97,18 +117,27 @@ int CHudDeathNotice::Draw(float flTime)
 
 		DeathNoticeItem& notice = rgDeathNoticeList[i];
 		float fade = 1.0f;
-		const float remaining = notice.flDisplayTime - flTime;
-		if (remaining < 0.75f)
-			fade = max(0.0f, remaining / 0.75f);
-		const float age = flTime - notice.flStartTime;
-		if (age < 0.12f)
-			fade *= max(0.0f, age / 0.12f);
+
+		if (modern)
+		{
+			const float remaining = notice.flDisplayTime - flTime;
+			if (remaining < 0.75f)
+				fade = max(0.0f, remaining / 0.75f);
+			const float age = flTime - notice.flStartTime;
+			if (age < 0.12f)
+				fade *= max(0.0f, age / 0.12f);
+		}
+		else
+		{
+			notice.flDisplayTime = min(notice.flDisplayTime,
+				flTime + DEATHNOTICE_DISPLAY_TIME);
+		}
 
 		{
 			if (!g_iUser1)
-				y = YRES(DEATHNOTICE_TOP) + 2 + (DEATHNOTICE_ROW_HEIGHT * i);
+				y = YRES(topOffset) + 2 + (rowHeight * i);
 			else
-				y = ScreenHeight / 5 + 2 + (DEATHNOTICE_ROW_HEIGHT * i);
+				y = ScreenHeight / 5 + 2 + (rowHeight * i);
 
 			int id = (notice.iId == -1) ? m_HUD_d_skull : notice.iId;
 			const int victimWidth = notice.bNonPlayerKill ? 0 :
@@ -120,16 +149,20 @@ int CHudDeathNotice::Draw(float flTime)
 				gHUD.GetSpriteRect(m_HUD_d_headshot).Width() : 0;
 			const int contentWidth = killerWidth + weaponWidth + headshotWidth +
 				victimWidth + (notice.bSuicide ? 0 : 5);
-			x = ScreenWidth - contentWidth - 12;
+			x = ScreenWidth - contentWidth - XRES( DEATHNOTICE_RIGHT_MARGIN );
 
 			const bool localEvent = notice.iKiller == gHUD.m_Scoreboard.m_iPlayerNum ||
 				notice.iVictim == gHUD.m_Scoreboard.m_iPlayerNum;
-			const int panelAlpha = static_cast<int>((localEvent ? 150 : 105) * fade);
-			FillRGBABlend(x - 7, y - 3, contentWidth + 13,
-				DEATHNOTICE_ROW_HEIGHT - 2, 0, 0, 0, panelAlpha);
-			if (localEvent)
-				FillRGBABlend(x - 7, y - 3, 3, DEATHNOTICE_ROW_HEIGHT - 2,
-					255, 160, 0, static_cast<int>(230 * fade));
+
+			if (modern)
+			{
+				const int panelAlpha = static_cast<int>((localEvent ? 150 : 105) * fade);
+				FillRGBABlend(x - 7, y - 3, contentWidth + 13,
+					rowHeight - 2, 0, 0, 0, panelAlpha);
+				if (localEvent)
+					FillRGBABlend(x - 7, y - 3, 3, rowHeight - 2,
+						255, 160, 0, static_cast<int>(230 * fade));
+			}
 
 			if (!notice.bSuicide)
 			{
@@ -139,10 +172,21 @@ int CHudDeathNotice::Draw(float flTime)
 				x = 5 + DrawUtils::DrawConsoleString(x, y, notice.szKiller);
 			}
 
-			r = localEvent ? 255 : 235; g = localEvent ? 175 : 110; b = 25;
-			if (notice.bTeamKill)
+			if (modern)
 			{
-				r = 255; g = 45; b = 45;
+				r = localEvent ? 255 : 235; g = localEvent ? 175 : 110; b = 25;
+				if (notice.bTeamKill)
+				{
+					r = 255; g = 45; b = 45;
+				}
+			}
+			else
+			{
+				r = 255; g = 80; b = 0;
+				if (notice.bTeamKill)
+				{
+					r = 10; g = 240; b = 10;  // display it in sickly green
+				}
 			}
 			r = static_cast<int>(r * fade);
 			g = static_cast<int>(g * fade);
@@ -195,16 +239,17 @@ int CHudDeathNotice::MsgFunc_DeathMsg(const char* pszName, int iSize, void* pbuf
 	gHUD.m_Scoreboard.DeathMsg(killer, victim);
 
 	gHUD.m_Spectator.DeathMessage(victim);
+	const int capacity = DeathNoticeCapacity();
 	int i;
-	for (i = 0; i < MAX_DEATHNOTICES; i++)
+	for (i = 0; i < capacity; i++)
 	{
 		if (rgDeathNoticeList[i].iId == 0)
 			break;
 	}
-	if (i == MAX_DEATHNOTICES)
+	if (i == capacity)
 	{ // move the rest of the list forward to make room for this item
-		memmove(rgDeathNoticeList, rgDeathNoticeList + 1, sizeof(DeathNoticeItem) * MAX_DEATHNOTICES);
-		i = MAX_DEATHNOTICES - 1;
+		memmove(rgDeathNoticeList, rgDeathNoticeList + 1, sizeof(DeathNoticeItem) * capacity);
+		i = capacity - 1;
 	}
 	memset(&rgDeathNoticeList[i], 0, sizeof(rgDeathNoticeList[i]));
 

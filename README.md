@@ -42,8 +42,9 @@ VAC-secured servers with a modified client module. Test it locally first.
 - VGUI2 team, model, and buy menus using the original CS 1.6 resources.
 - Client-side weapon prediction and reconciliation through `HUD_PostRunCmd`.
 - Restored Counter-Strike studio renderer, gait animation, and weapon events.
-- Original CS HUD sprites and fonts.
-- Steam avatars in the scoreboard and spectator HUD.
+- Original CS HUD sprites and glyphs, with a Unicode fallback per string.
+- Vanilla HUD layout by default; the reworked look is opt-in per element.
+- Optional Steam avatars in the scoreboard, top roster, and spectator HUD.
 - Improved kill feed, voice speaker display, overview radar, and spectator UI.
 - Correct widescreen sniper scope rendering.
 - Steam Rich Presence and optional Discord RPC without an extra Discord DLL.
@@ -258,6 +259,9 @@ cs_vgui_hide                 // close the active VGUI panel
 cs_vgui2_status              // print VGUI2 interface status
 cs_vgui_reload_commandmenu   // reload commandmenu.txt
 cs_test_centertext           // test the centered text HUD layer
+cs_test_centertext #Cant_buy 90  // replay a localized message with arguments
+cs_localize_status Cant_buy  // list loaded resource files, resolve one token
+cs_localize_reload           // re-read resource/*.txt
 ```
 
 Disable the new viewport and use classic text menus:
@@ -268,18 +272,85 @@ cs_vgui_enable 0
 
 Re-enable it with `cs_vgui_enable 1`.
 
+### HUD style
+
+The client starts with the vanilla Counter-Strike 1.6 layout. Everything this
+port reworked is opt-in, either all at once or one element at a time:
+
+```cfg
+hud_modern      // switch every reworked element on
+hud_vanilla     // back to the stock look (default)
+hud_style       // print which style each element currently uses
+```
+
+`hud_modern` and `hud_vanilla` just move the cvars below, so they can be put in
+`userconfig.cfg` or `autoexec.cfg` like any other setting:
+
+```cfg
+cl_hud_modern 0             // master switch, 0 = vanilla (default)
+
+cl_radar_overview -1        // square overview map instead of the radar sprite
+cl_radar_style -1           // rings and guide lines drawn over the radar
+cl_team_roster -1           // top panel with the team roster and Steam avatars
+cl_spectator_hud_modern -1  // reworked spectator layout and player card
+cl_scoreboard_avatars -1    // Steam avatars in the scoreboard
+cl_killfeed_modern -1       // kill feed row panels, fading and 6 slots
+cl_voice_modern -1          // speaker list panels with Steam avatars
+```
+
+Each element cvar takes three values: `-1` follows `cl_hud_modern`, `0` forces
+the vanilla version, `1` forces the reworked one. So a vanilla HUD with only
+the overview radar is:
+
+```cfg
+cl_hud_modern 0
+cl_radar_overview 1
+```
+
+These cvars are archived, so a `config.cfg` written by an earlier build still
+carries the old `1` defaults. Run `hud_vanilla` once after upgrading to get the
+stock look.
+
+### HUD font
+
+Every HUD string -- scoreboard, spectator panels, text menus, MOTD -- and the
+buy, team and model menus use the fonts Counter-Strike defines in its own
+`resource/ClientScheme.res`, so the client's text matches the rest of the game.
+
+```cfg
+cl_hud_font 0  // 0 = the game's own scheme font (default)
+               // 1 = the engine's bitmap font, falling back to the scheme font
+               //     for characters it has no glyph for
+```
+
+Escape (in the buy menu, the team menu or a text menu) closes that menu first;
+the pause menu only opens once nothing of the client's is left on screen.
+
+### Crosshair
+
+The crosshair stays pinned to the centre of the screen, as it does in the stock
+client. Set a positive scale to let it ride the recoil instead:
+
+```cfg
+cl_recoil_crosshair_scale 0  // 0 = never moves (default), 1 = follows the recoil
+cl_dynamiccrosshair 1        // unrelated: the classic spread-driven gap
+```
+
 ### Radar
 
 ```cfg
-cl_radar_style 1          // 0 = classic markers without the new grid
+cl_radar_scale 32         // world units per radar pixel, 4-128; lower zooms in
 cl_radar_alpha 180        // grid and marker intensity, 40-255
 cl_radar_show_location 1  // show the current location below the radar
 ```
 
 ### Spectator HUD
 
+While spectating, duck (CTRL by default) hides and shows the spectator panels.
+The same toggle is available as a command, so it can be bound elsewhere:
+
 ```cfg
-cl_spectator_hud_modern 1 // 0 = classic spectator HUD
+bind "v" "_spec_toggle_menu"
 ```
 
 ### Steam and Discord presence

@@ -903,6 +903,8 @@ public:
     }
     void SetTeam(int team) { if (team == CS_TEAM_T || team == CS_TEAM_CT) m_team = team; }
 
+    int GetCurrentMenu() const { return m_currentMenu; }
+
     int ShowMenu(int menuId)
     {
         const BuyEntry* entries = 0; int count = 0;
@@ -1188,6 +1190,8 @@ extern "C" int CS16VGUI_ImplShowMenu(int menuId) { return g_viewport ? g_viewpor
 extern "C" int CS16VGUI_ImplShowCommandMenu(void) { return g_viewport ? g_viewport->ShowCommandMenu() : 0; }
 extern "C" void CS16VGUI_ImplReleaseCommandMenu(void) { if (g_viewport) g_viewport->ReleaseCommandMenu(); }
 extern "C" void CS16VGUI_ImplHideMenu(void) { if (g_viewport) g_viewport->HideMenu(); }
+extern "C" int CS16VGUI_ImplIsMenuVisible(void) { return g_viewport ? g_viewport->GetCurrentMenu() != 0 : 0; }
+extern "C" int CS16VGUI_ImplGetCurrentMenu(void) { return g_viewport ? g_viewport->GetCurrentMenu() : 0; }
 extern "C" int CS16VGUI_ImplKeyInput(int down, int keynum, const char*) { return g_viewport ? g_viewport->KeyInput(down, keynum) : 0; }
 
 #endif

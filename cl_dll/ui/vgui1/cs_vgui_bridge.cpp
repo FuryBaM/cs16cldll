@@ -28,6 +28,8 @@ extern "C" void CS16VGUI_ImplShutdown(void);
 extern "C" void CS16VGUI_ImplSetTeam(int team);
 extern "C" int CS16VGUI_ImplShowMenu(int menuId);
 extern "C" void CS16VGUI_ImplHideMenu(void);
+extern "C" int CS16VGUI_ImplIsMenuVisible(void);
+extern "C" int CS16VGUI_ImplGetCurrentMenu(void);
 extern "C" int CS16VGUI_ImplKeyInput(int down, int keynum, const char* currentBinding);
 extern "C" int CS16VGUI_ImplShowCommandMenu(void);
 extern "C" void CS16VGUI_ImplReleaseCommandMenu(void);
@@ -927,6 +929,7 @@ extern "C" void* CS16VGUI_GetRootPanel(void)
 
 extern "C" void CS16VGUI_ClientCommand(const char* command)
 {
+	CS16_TrackSelectionMenuCommand(command);
 	if (command && !strncmp(command, "joinclass ", 10))
 	{
 		CS16_SetRuntimeTrace(true);
@@ -1111,6 +1114,35 @@ extern "C" int CS16VGUI_ShowMenu(int menuId)
     return 0;
 }
 
+extern "C" int CS16VGUI_IsMenuVisible(void)
+{
+    if (!g_vguiDisabledForSession && CS16VGUI_IsEnabledByCvar() &&
+        CS16VGUI2_IsMenuVisible())
+        return 1;
+
+#if defined(_CS16CLIENT_ENABLE_VGUI1)
+    // commandmenu.txt still lives on the VGUI1 viewport, so Escape has to see
+    // that one too.
+    if (g_vguiInitialized && CS16VGUI_ImplIsMenuVisible())
+        return 1;
+#endif
+
+    return 0;
+}
+
+extern "C" int CS16VGUI_GetCurrentMenu(void)
+{
+    if (!g_vguiDisabledForSession && CS16VGUI_IsEnabledByCvar() &&
+        CS16VGUI2_IsViewportReady() && CS16VGUI2_IsMenuVisible())
+        return CS16VGUI2_GetCurrentMenu();
+
+#if defined(_CS16CLIENT_ENABLE_VGUI1)
+    if (CS16VGUI_IsAvailable() && CS16VGUI_ImplIsMenuVisible())
+        return CS16VGUI_ImplGetCurrentMenu();
+#endif
+    return 0;
+}
+
 extern "C" void CS16VGUI_HideMenu(void)
 {
     CS16VGUI2_HideMenu();
@@ -1134,11 +1166,20 @@ extern "C" int CS16VGUI_KeyInput(int down, int keynum, const char* currentBindin
 {
     if (!g_vguiDisabledForSession && CS16VGUI_IsEnabledByCvar() &&
         CS16VGUI2_KeyInput(down, keynum, currentBinding))
+    {
+        if (down && keynum == 27)
+            CS16_MarkMenuEscapeHandled();
         return 1;
+    }
 
 #if defined(_CS16CLIENT_ENABLE_VGUI1)
     if (CS16VGUI_IsAvailable())
-        return CS16VGUI_ImplKeyInput(down, keynum, currentBinding);
+    {
+        const int handled = CS16VGUI_ImplKeyInput(down, keynum, currentBinding);
+        if (handled && down && keynum == 27)
+            CS16_MarkMenuEscapeHandled();
+        return handled;
+    }
 #else
     (void)down;
     (void)keynum;

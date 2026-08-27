@@ -228,15 +228,9 @@ void CHud::UpdateDefaultHUDColor()
 
 int CHud::DrawHudString(int xpos, int ypos, int iMaxX, char* szIt, int r, int g, int b)
 {
-	char converted[4096];
-	const char* text = CS16_LegacyHudText(szIt, converted, sizeof(converted));
-	if (CS16_HudTextNeedsUnicode(text))
-	{
-		const int wide = CS16VGUI2_DrawHudString(xpos, ypos, text, r, g, b, 255);
-		if (wide >= 0)
-			return xpos + wide;
-	}
-	return xpos + gEngfuncs.pfnDrawString(xpos, ypos, text, r, g, b);
+	// One text path for the whole HUD, so the menus cannot end up on a
+	// different font than the scoreboard.
+	return DrawUtils::DrawHudString(xpos, ypos, iMaxX, szIt, r, g, b);
 }
 
 int CHud::DrawHudNumberString(int xpos, int ypos, int iMinX, int iNumber, int r, int g, int b)
@@ -250,16 +244,7 @@ int CHud::DrawHudNumberString(int xpos, int ypos, int iMinX, int iNumber, int r,
 // draws a string from right to left (right-aligned)
 int CHud::DrawHudStringReverse(int xpos, int ypos, int iMinX, char* szString, int r, int g, int b)
 {
-	char converted[4096];
-	const char* text = CS16_LegacyHudText(szString, converted, sizeof(converted));
-	if (CS16_HudTextNeedsUnicode(text))
-	{
-		int wide = 0, tall = 0;
-		if (CS16VGUI2_GetHudStringSize(text, &wide, &tall) &&
-			CS16VGUI2_DrawHudString(xpos - wide, ypos, text, r, g, b, 255) >= 0)
-			return xpos - wide;
-	}
-	return xpos - gEngfuncs.pfnDrawStringReverse(xpos, ypos, text, r, g, b);
+	return DrawUtils::DrawHudStringReverse(xpos, ypos, iMinX, szString, r, g, b);
 }
 
 int CHud::DrawHudNumber(int x, int y, int iFlags, int iNumber, int r, int g, int b)

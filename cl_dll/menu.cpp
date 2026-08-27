@@ -21,6 +21,7 @@
 #include "cl_util.h"
 #include "parsemsg.h"
 #include "cs_vgui.h"
+#include "cs_vgui2.h"
 #include "draw_util.h"
 
 #include <string.h>
@@ -29,6 +30,8 @@
 #define MAX_MENU_STRING	512
 char g_szMenuString[MAX_MENU_STRING];
 char g_szPrelocalisedMenuString[MAX_MENU_STRING];
+static int g_pendingClassMenu = 0;
+static int g_pendingSelectionMenuRequest = 0;
 
 int KB_ConvertString(char* in, char** ppout);
 
@@ -53,6 +56,8 @@ int CHudMenu::Init(void)
 
 void CHudMenu::InitHUDData(void)
 {
+	g_pendingClassMenu = 0;
+	g_pendingSelectionMenuRequest = 0;
 	m_fMenuDisplayed = 0;
 	m_bAllowSpec = true;
 	m_bitsValidSlots = 0;
@@ -150,9 +155,6 @@ int CHudMenu::Draw(float flTime)
 	//if (gViewPort && gViewPort->IsScoreBoardVisible())
 	//	return 1;
 
-	SCREENINFO screenInfo;
-	screenInfo.iSize = sizeof(SCREENINFO);
-	gEngfuncs.pfnGetScreenInfo(&screenInfo);
 
 	// draw the menu, along the left-hand side of the screen
 
@@ -165,18 +167,9 @@ int CHudMenu::Draw(float flTime)
 			nlc++;
 	}
 
-	int nFontHeight = max(12, screenInfo.iCharHeight);
-	// ShowMenu text is split into chunks at color escape sequences. Without
-	// this line-wide decision, ASCII slot numbers use GoldSrc's bitmap font
-	// while the Cyrillic part of the same line uses the VGUI2 EngineFont.
-	// Keep every chunk on one font whenever the menu needs Unicode rendering.
-	const bool useUnicodeFont = CS16_HudTextNeedsUnicode(g_szMenuString);
-	if (useUnicodeFont)
-	{
-		int fontWide = 0, fontTall = 0;
-		if (CS16VGUI2_GetHudStringSize("0", &fontWide, &fontTall))
-			nFontHeight = max(nFontHeight, fontTall);
-	}
+	// DrawUtils picks the font for HUD strings, so take the line height from
+	// whichever one it ended up using.
+	const int nFontHeight = max(12, DrawUtils::HudTextTall());
 
 	// center it
 	int y = (ScreenHeight / 2) - ((nlc / 2) * nFontHeight) - (3 * nFontHeight + nFontHeight / 3); // make sure it is above the say text
@@ -213,53 +206,119 @@ int CHudMenu::Draw(float flTime)
 			}
 			strncpy(menubuf, ptr, min((sptr - ptr), (int)sizeof(menubuf)));
 			menubuf[min((sptr - ptr), (int)(sizeof(menubuf) - 1))] = '\0';
-			char converted[256];
-			const char* menuText = useUnicodeFont
-				? CS16_LegacyHudText(menubuf, converted, sizeof(converted))
-				: menubuf;
-
 			if (menu_ralign)
 			{
 				// IMPORTANT: Right-to-left rendered text does not parse escape tokens!
-				if (useUnicodeFont)
-				{
-					int wide = 0, tall = 0;
-					if (CS16VGUI2_GetHudStringSize(menuText, &wide, &tall) &&
-						CS16VGUI2_DrawHudString(menu_x - wide, y, menuText,
-							menu_r, menu_g, menu_b, 255) >= 0)
-						menu_x -= wide;
-					else
-						menu_x = gHUD.DrawHudStringReverse(menu_x, y, 0,
-							menubuf, menu_r, menu_g, menu_b);
-				}
-				else
-				{
-					menu_x = gHUD.DrawHudStringReverse(menu_x, y, 0,
-						menubuf, menu_r, menu_g, menu_b);
-				}
+				menu_x = gHUD.DrawHudStringReverse(menu_x, y, 0,
+					menubuf, menu_r, menu_g, menu_b);
 			}
 			else
 			{
-				if (useUnicodeFont)
-				{
-					const int wide = CS16VGUI2_DrawHudString(menu_x, y,
-						menuText, menu_r, menu_g, menu_b, 255);
-					if (wide >= 0)
-						menu_x += wide;
-					else
-						menu_x = gHUD.DrawHudString(menu_x, y, 320,
-							menubuf, menu_r, menu_g, menu_b);
-				}
-				else
-				{
-					menu_x = gHUD.DrawHudString(menu_x, y, 320,
-						menubuf, menu_r, menu_g, menu_b);
-				}
+				menu_x = gHUD.DrawHudString(menu_x, y, ScreenWidth / 2,
+					menubuf, menu_r, menu_g, menu_b);
 			}
 		}
 	}
 
 	return 1;
+}
+
+namespace
+{
+double g_lastHandledMenuEscape = -1.0;
+const double kDuplicateEscapeWindow = 0.1;
+
+double CS16_EscapeClock(void)
+{
+	return gEngfuncs.GetAbsoluteTime
+		? gEngfuncs.GetAbsoluteTime()
+		: (double)gHUD.m_flTime;
+}
+}
+
+void CS16_SetClassSelectionPending(int menuId)
+{
+	g_pendingClassMenu = (menuId == 26 || menuId == 27) ? menuId : 0;
+}
+
+void CS16_TrackSelectionMenuCommand(const char* command)
+{
+	if (!command)
+		return;
+
+	// A class choice completes this flow. A jointeam request starts a fresh
+	// server-driven flow, whose VGUIMenu message will set it pending again when
+	// a class choice is required.
+	if (!strncmp(command, "joinclass ", 10) ||
+		!strncmp(command, "jointeam ", 9))
+		g_pendingClassMenu = 0;
+}
+
+bool CS16_ReopenPendingSelectionMenu(const char* currentBinding)
+{
+	if (!g_pendingClassMenu || !currentBinding ||
+		g_pendingSelectionMenuRequest || CS16VGUI_IsMenuVisible() ||
+		gHUD.m_Menu.m_fMenuDisplayed)
+		return false;
+
+	const char* command = strstr(currentBinding, "chooseteam");
+	if (!command)
+		return false;
+
+	const char before = command == currentBinding ? '\0' : command[-1];
+	const char after = command[10];
+	const bool validBefore = before == '\0' || before == ';' ||
+		before == ' ' || before == '\t';
+	const bool validAfter = after == '\0' || after == ';' ||
+		after == ' ' || after == '\t';
+	if (!validBefore || !validAfter)
+		return false;
+
+	g_pendingSelectionMenuRequest = g_pendingClassMenu;
+	return true;
+}
+
+int CS16_ConsumePendingSelectionMenuRequest(void)
+{
+	const int menuId = g_pendingSelectionMenuRequest;
+	g_pendingSelectionMenuRequest = 0;
+	return menuId;
+}
+
+void CS16_MarkMenuEscapeHandled(void)
+{
+	g_lastHandledMenuEscape = CS16_EscapeClock();
+}
+
+bool CS16_ConsumeMenuEscapeHandled(void)
+{
+	if (g_lastHandledMenuEscape < 0.0)
+		return false;
+
+	const double elapsed = CS16_EscapeClock() - g_lastHandledMenuEscape;
+	g_lastHandledMenuEscape = -1.0;
+	const bool consumed = elapsed >= 0.0 && elapsed <= kDuplicateEscapeWindow;
+	return consumed;
+}
+bool CS16_CloseTopmostMenu(void)
+{
+	if (CS16VGUI_IsMenuVisible())
+	{
+		CS16VGUI_HideMenu();
+		CS16_MarkMenuEscapeHandled();
+		return true;
+	}
+
+	if (gHUD.m_Menu.m_fMenuDisplayed)
+	{
+		gHUD.m_Menu.m_fMenuDisplayed = 0;
+		gHUD.m_Menu.m_iFlags &= ~HUD_ACTIVE;
+		gHUD.m_Menu.m_flShutoffTime = -1;
+		CS16_MarkMenuEscapeHandled();
+		return true;
+	}
+
+	return false;
 }
 
 // selects an item from the menu
@@ -353,6 +412,8 @@ int CHudMenu::MsgFunc_VGUIMenu(const char* pszName, int iSize, void* pbuf)
 		m_bitsValidSlots = reader.ReadShort();
 	if (CS16VGUI_ShowMenu(menu))
 	{
+		if (menu == 26 || menu == 27)
+			CS16_SetClassSelectionPending(menu);
 		m_fMenuDisplayed = 0;
 		m_iFlags &= ~HUD_ACTIVE;
 		return 1;

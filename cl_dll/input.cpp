@@ -21,6 +21,7 @@ extern "C"
 #include <ctype.h>
 #include "Exports.h"
 #include "cs_vgui.h"
+#include "keydefs.h"
 #include "platform/steam_integration.h"
 #include "platform/discord_rpc.h"
 
@@ -369,7 +370,31 @@ Return 1 to allow engine to process the key, otherwise, act on it as needed
 int CL_DLLEXPORT HUD_Key_Event( int down, int keynum, const char *pszCurrentBinding )
 {
 //	RecClKeyEvent(down, keynum, pszCurrentBinding);
+	// GoldSrc keeps waiting for joinclass after that panel was dismissed and
+	// rejects chooseteam. Let the normal binding restore the pending class locally.
+	if (down && CS16_ReopenPendingSelectionMenu(pszCurrentBinding))
+		return 0;
+
 	if (CS16VGUI_KeyInput(down, keynum, pszCurrentBinding))
+	{
+		// This callback itself delivered Escape to VGUI, so there will be no
+		// second client callback that needs the duplicate-event marker.
+		if (down && keynum == K_ESCAPE)
+			CS16_ConsumeMenuEscapeHandled();
+		return 0;
+	}
+
+	// Steam sends Escape to the focused VGUI panel before asking the client DLL
+	// whether the engine may process the key.  The panel therefore can already
+	// have hidden itself by the time this callback runs.  Consume the marker it
+	// left behind; otherwise the now-invisible menu makes the checks below miss
+	// and returning 1 lets the same physical Escape open GameUI.
+	if (down && keynum == K_ESCAPE && CS16_ConsumeMenuEscapeHandled())
+		return 0;
+
+	// Escape normally arrives through the cancelselect binding rather than
+	// here, but handle it for the setups where the engine does deliver it.
+	if( down && keynum == K_ESCAPE && CS16_CloseTopmostMenu() )
 		return 0;
 
 	return 1;
@@ -997,6 +1022,7 @@ void InitInput (void)
 	KB_Init();
 	// Initialize view system
 	V_Init();
+	CS16_InstallMenuEscapeHook();
 }
 
 /*
@@ -1006,6 +1032,7 @@ ShutdownInput
 */
 void ShutdownInput (void)
 {
+	CS16_RemoveMenuEscapeHook();
 	IN_Shutdown();
 	KB_Shutdown();
 }

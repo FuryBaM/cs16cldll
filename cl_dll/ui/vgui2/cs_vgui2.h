@@ -20,6 +20,8 @@ void* CS16VGUI2_GetInterface(const char* versionName);
 int CS16VGUI2_IsViewportReady(void);
 int CS16VGUI2_ShowMenu(int menuId);
 void CS16VGUI2_HideMenu(void);
+int CS16VGUI2_IsMenuVisible(void);
+int CS16VGUI2_GetCurrentMenu(void);
 int CS16VGUI2_KeyInput(int down, int keynum, const char* currentBinding);
 void CS16VGUI2_SetTeam(int team);
 void CS16VGUI2_SetLegacyCursorVisible(int visible);
@@ -34,6 +36,8 @@ void CS16VGUI2_DrawHudRect(int x, int y, int wide, int tall,
 int CS16VGUI2_DrawHudString(int x, int y, const char* text,
     int r, int g, int b, int a);
 int CS16VGUI2_GetHudStringSize(const char* text, int* wide, int* tall);
+// Height of the font HUD strings are drawn with, 0 when VGUI2 is unavailable.
+int CS16VGUI2_GetHudFontTall(void);
 void CS16VGUI2_ShutdownViewport(void);
 
 #ifdef __cplusplus

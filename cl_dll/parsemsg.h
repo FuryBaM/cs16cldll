@@ -103,14 +103,16 @@ inline char* BufferReader::Read( void )
 	size_t l;
 	for( l = 0; l < sizeof(string) - 1; l++)
 	{
-		if( m_iRead > m_iSize )
+		if( m_iRead >= m_iSize )
 			break;
 
-		int8_t c = ReadChar();
-		if( c == -1 || c == 0 )
+		// Read as unsigned: 0xFF is a perfectly valid character in a CP1251
+		// name or chat line and must not be mistaken for end of buffer.
+		uint8_t c = ReadByte();
+		if( m_bBad || c == 0 )
 			break;
 
-		string[l] = c;
+		string[l] = (char)c;
 	}
 
 	string[l] = 0;

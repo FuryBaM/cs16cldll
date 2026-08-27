@@ -527,6 +527,18 @@ void CHudMessage::MessageAdd(const char* pName, float time)
 				message->holdtime = 5;
 			}
 
+			// HudText carries no arguments, so a "%s1" in the title can only
+			// be dropped -- printing it raw is what the stock client avoids by
+			// sending these through HudTextArgs instead.
+			if (message->pMessage && CS16_HasFormatPlaceholder(message->pMessage))
+			{
+				char stripped[512];
+				strncpy(stripped, message->pMessage, sizeof(stripped));
+				stripped[sizeof(stripped) - 1] = 0;
+				CS16_StripFormatPlaceholders(stripped);
+				message = AllocMessage(stripped, message);
+			}
+
 			// safety check - don't add empty messages
 			if (!message->pMessage || message->pMessage[0] == '\0')
 			{
@@ -652,21 +664,77 @@ int CHudMessage::MsgFunc_HudTextPro(const char* pszName, int iSize, void* pbuf)
 	return 1;
 }
 
+// The bomb, hostage and VIP announcements arrive here: a titles.txt token plus
+// the names to substitute into its %s1..%s4 placeholders. The drawing code walks
+// a plain string, so the arguments are baked in before the message is queued.
 int CHudMessage::MsgFunc_HudTextArgs(const char* pszName, int iSize, void* pbuf)
 {
-	/*BufferReader reader( pszName, pbuf, iSize );
+	BufferReader reader(pszName, pbuf, iSize);
 
-	const char *sz = reader.ReadString();
-	int hint = reader.ReadByte();
+	char szName[128];
+	strncpy(szName, reader.ReadString(), sizeof(szName));
+	szName[sizeof(szName) - 1] = 0;
 
-	MessageAdd(sz, gHUD.m_flTime, hint, Newfont); // TODO
+	reader.ReadByte(); // hint message flag, unused by this HUD
 
-	// Remember the time -- to fix up level transitions
+	int argCount = reader.ReadByte();
+	if (argCount < 0)
+		argCount = 0;
+	if (argCount > 4)
+		argCount = 4;
+
+	static char szArgs[4][128];
+	const char* args[4] = { szArgs[0], szArgs[1], szArgs[2], szArgs[3] };
+	for (int i = 0; i < 4; i++)
+	{
+		const char* value = i < argCount ? CS16_Localize(reader.ReadString()) : "";
+		strncpy(szArgs[i], value, sizeof(szArgs[i]));
+		szArgs[i][sizeof(szArgs[i]) - 1] = 0;
+	}
+
+	const char* key = szName[0] == '#' ? szName + 1 : szName;
+	client_textmessage_t* found = TextMessageGet(key);
+	const char* format = found && found->pMessage ? found->pMessage : szName;
+	if (format[0] == '#')
+		format = CS16_Localize(format);
+
+	char text[512];
+	CS16_LocalizeFormat(text, sizeof(text), format, args, 4);
+	CS16_StripFormatPlaceholders(text);
+	if (!text[0])
+		return 1;
+
+	// Keep the title's own placement and colours where titles.txt has them.
+	client_textmessage_t message;
+	if (found)
+	{
+		message = *found;
+	}
+	else
+	{
+		memset(&message, 0, sizeof(message));
+		message.effect = 2;
+		message.r1 = message.g1 = message.b1 = message.a1 = 100;
+		message.r2 = 240;
+		message.g2 = 110;
+		message.b2 = 0;
+		message.a2 = 0;
+		message.x = -1;		// Centered
+		message.y = 0.7f;
+		message.fadein = 0.01f;
+		message.fadeout = 1.5f;
+		message.fxtime = 0.25f;
+		message.holdtime = 5.0f;
+	}
+
+	// MessageAdd() takes a copy of anything named "Custom", so pointing at the
+	// stack buffer here is safe.
+	message.pName = "Custom";
+	message.pMessage = text;
+	MessageAdd(&message);
+
 	m_parms.time = gHUD.m_flTime;
-
-	// Turn on drawing
-	if ( !(m_iFlags & HUD_ACTIVE) )
-		m_iFlags |= HUD_ACTIVE;*/
+	m_iFlags |= HUD_DRAW;
 
 	return 1;
 }
